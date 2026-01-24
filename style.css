@@ -2225,3 +2225,33 @@ span.flatpickr-weekday {
         justify-content: center;
     }
 }
+
+/* ===== Admin Table Text Truncation ===== */
+.table-truncate-title {
+    max-width: 250px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.table-truncate-category {
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+}
+
+.table-truncate-location {
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Tooltip behavior on hover */
+.table-truncate-title:hover,
+.table-truncate-category:hover,
+.table-truncate-location:hover {
+    cursor: help;
+}
