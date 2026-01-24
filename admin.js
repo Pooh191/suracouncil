@@ -558,11 +558,15 @@ function loadComplaintsTable() {
                         ${data.isDuplicate ? '<div class="mt-1"><span class="badge bg-danger-subtle text-danger" style="font-size: 0.7rem;"><i class="bi bi-intersect me-1"></i>เรื่องซ้ำ</span></div>' : ''}
                     </td>
                     <td data-label="หัวข้อ">
-                        <div class="fw-bold text-dark">${data.title || '-'}</div>
+                        <div class="fw-bold text-dark table-truncate-title" title="${data.title || '-'}">${data.title || '-'}</div>
                     </td>
-                    <td data-label="ประเภท"><span class="badge bg-secondary-subtle text-secondary px-3 py-2 rounded-pill">${data.category || '-'}</span></td>
+                    <td data-label="ประเภท">
+                        <span class="badge bg-secondary-subtle text-secondary px-3 py-2 rounded-pill table-truncate-category" title="${data.category || '-'}">
+                            ${data.category || '-'}
+                        </span>
+                    </td>
                     <td data-label="สถานที่">
-                        <div class="small fw-bold text-dark">${data.location || '-'}</div>
+                        <div class="small fw-bold text-dark table-truncate-location" title="${data.location || '-'}">${data.location || '-'}</div>
                     </td>
                     <td data-label="วันที่พบปัญหา" class="small">
                         ${data.incidentDate ? new Date(data.incidentDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '-'}
@@ -596,7 +600,6 @@ function loadComplaintsTable() {
                                 </button>
                                 <button class="btn btn-action-delete btn-sm rounded-circle border-0" 
                                         data-id="${id}" 
-                                        onclick="handleDeleteComplaint(event)"
                                         title="ลบ">
                                     <i class="bi bi-trash-fill"></i>
                                 </button>
@@ -638,13 +641,13 @@ function loadComplaintsTable() {
 // ===== เพิ่ม Event Listeners ในตาราง =====
 function addTableEventListeners() {
     // Dropdown เปลี่ยนสถานะ
-    const statusSelects = document.querySelectorAll('.status-select');
+    const statusSelects = document.querySelectorAll('.status-select-modern');
     statusSelects.forEach(select => {
         select.addEventListener('change', handleStatusChange);
     });
 
     // ปุ่มลบ
-    const deleteBtns = document.querySelectorAll('.btn-outline-danger');
+    const deleteBtns = document.querySelectorAll('.btn-action-delete');
     deleteBtns.forEach(btn => {
         btn.addEventListener('click', handleDeleteComplaint);
     });
@@ -751,19 +754,7 @@ async function handleViewDetails(e) {
                             </div>
                         </div>
 
-                        <!-- Duplicate Detection Info -->
-                        <div class="detail-section mb-4 p-3 bg-light rounded-4 border">
-                             <h6 class="text-muted small text-uppercase fw-bold mb-2"><i class="bi bi-intersect me-2"></i>จัดการเรื่องซ้ำ</h6>
-                             ${data.isDuplicate ? `
-                                <div class="alert alert-warning p-2 small mb-0 mt-2">
-                                    <i class="bi bi-intersect me-1"></i> เรื่องซ้ำของ: <strong>${data.duplicateOf}</strong>
-                                </div>
-                             ` : `
-                                <button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="markAsDuplicate('${complaintId}')">
-                                    <i class="bi bi-intersect me-1"></i> ตรวจสอบเรื่องซ้ำ
-                                </button>
-                             `}
-                        </div>
+
 
                         <div class="detail-section mb-4">
                             <h6 class="text-muted small text-uppercase fw-bold mb-3"><i class="bi bi-clock-history me-2 text-success"></i>ประวัติการแก้ไข (Timeline)</h6>
@@ -839,59 +830,42 @@ async function handleStatusChange(e) {
     const doc = await complaintsCollection.doc(complaintId).get();
     const data = doc.data();
 
-    // กรณีไม่รับเรื่อง - ต้องใส่เหตุผล
-    if (newStatus === 'rejected') {
-        const { value: text } = await Swal.fire({
-            title: 'ระบุเหตุผลที่ไม่รับเรื่อง',
-            input: 'textarea',
-            inputLabel: 'เหตุผลประกอบ',
-            inputPlaceholder: 'กรอกเหตุผลที่นี่...',
-            inputAttributes: {
-                'aria-label': 'กรอกเหตุผลที่นี่'
-            },
-            showCancelButton: true,
-            confirmButtonText: 'ยืนยัน',
-            cancelButtonText: 'ยกเลิก',
-            confirmButtonColor: '#d33',
-            inputValidator: (value) => {
-                if (!value) {
-                    return 'กรุณาระบุเหตุผลด้วยครับ'
-                }
-            }
-        });
+    // กรณีดำเนินการ, เสร็จสิ้น, หรือ ไม่รับเรื่อง - ใช้ Modal รูปแบบพรีเมียม
+    if (newStatus === 'in-progress' || newStatus === 'resolved' || newStatus === 'rejected') {
+        const isRejected = newStatus === 'rejected';
 
-        if (!text) {
-            // ยกเลิกการเปลี่ยนสถานะ
-            loadComplaintsTable();
-            return;
-        }
-        feedback = text;
-    }
-    // กรณีดำเนินการ หรือ เสร็จสิ้น - ใส่รูปภาพหรือเหตุผล (ไม่บังคับ)
-    else if (newStatus === 'in-progress' || newStatus === 'resolved') {
         const { value: result } = await Swal.fire({
             title: `อัพเดตข้อมูลสถานะ: ${getStatusText(newStatus)}`,
             html:
                 `<div class="text-start">
-                    <label class="form-label small">เหตุผลหรือรายละเอียดเพิ่มเติม (ถ้ามี)</label>
-                    <textarea id="swal-feedback" class="form-control mb-3" placeholder="กรอกรายละเอียด...">${data.adminFeedback || ''}</textarea>
-                    <label class="form-label small">อัปโหลดรูปภาพหลักฐาน (ถ้ามี)</label>
-                    <input type="file" id="swal-imagefile" class="form-control mb-1" accept="image/*">
-                    <div id="upload-status" class="small text-muted mb-3"></div>
+                    <label class="form-label small fw-bold text-dark">${isRejected ? 'ระบุเหตุผลที่ไม่รับเรื่อง' : 'เหตุผลหรือรายละเอียดเพิ่มเติม (ถ้ามี)'}</label>
+                    <textarea id="swal-feedback" class="form-control mb-3" style="border-radius: 12px; font-size: 0.9rem;" placeholder="กรอกรายละเอียด...">${data.adminFeedback || ''}</textarea>
+                    
+                    <label class="form-label small fw-bold text-dark">อัปโหลดรูปภาพหลักฐาน (ถ้ามี)</label>
+                    <div class="input-group">
+                        <input type="file" id="swal-imagefile" class="form-control" style="border-radius: 12px;" accept="image/*">
+                    </div>
+                    <div id="upload-status" class="small text-muted mt-2"></div>
                 </div>`,
             focusConfirm: false,
             showCancelButton: true,
-            confirmButtonText: 'บันทึก',
+            confirmButtonText: 'บันทึกข้อมูล',
             cancelButtonText: 'ยกเลิก',
-            confirmButtonColor: '#1b5e20',
+            confirmButtonColor: isRejected ? '#dc2626' : '#1b5e20',
             preConfirm: async () => {
                 const feedbackValue = document.getElementById('swal-feedback').value;
                 const imageFile = document.getElementById('swal-imagefile').files[0];
                 let uploadedUrl = data.adminImageUrl || "";
 
+                // บังคับใส่เหตุผลถ้าไม่รับเรื่อง
+                if (isRejected && !feedbackValue.trim()) {
+                    Swal.showValidationMessage('กรุณาระบุเหตุผลที่ไม่รับเรื่องด้วยครับ');
+                    return false;
+                }
+
                 if (imageFile) {
                     Swal.showLoading();
-                    document.getElementById('upload-status').innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังอัปโหลดรูปภาพ...';
+                    document.getElementById('upload-status').innerHTML = '<span class="spinner-border spinner-border-sm me-1 text-success"></span>กำลังอัปโหลดรูปภาพ...';
                     uploadedUrl = await uploadToImgBB(imageFile);
                     if (!uploadedUrl) {
                         Swal.showValidationMessage('การอัปโหลดรูปภาพล้มเหลว กรุณาลองใหม่อีกครั้ง');
@@ -908,7 +882,7 @@ async function handleStatusChange(e) {
         });
 
         if (!result) {
-            // ยกเลิกการเปลี่ยนสถานะ
+            // ยกเลิกการเปลี่ยนสถานะ โดยให้ตัวเลือก Reset กลับเป็นค่าเดิม
             loadComplaintsTable();
             return;
         }
