@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจัดการร้องเรียน | สภานักเรียนโรงเรียนสุรวิทยาคาร</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Google Fonts - Kanit -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+    <!-- Firebase SDK (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- html2pdf.js for PDF Export (Supports Thai better) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+
+<body class="admin-container">
+    <!-- Login Section (แสดงก่อนล็อกอิน) -->
+    <div id="loginSection" class="container login-container">
+        <div class="card form-card">
+            <div class="card-header">
+                <div class="logo-circle mx-auto mb-3">
+                    <img src="logo.png" alt="Logo">
+                </div>
+                <h3 class="fw-bold text-white mb-0">ระบบจัดการหลังบ้าน</h3>
+                <small class="text-white-50">Admin Control Panel</small>
+            </div>
+            <div class="card-body p-4 p-md-5">
+                <div class="text-center mb-4">
+                    <h4 class="fw-bold text-gradient">เข้าสู่ระบบผู้ดูแล</h4>
+                    <p class="text-muted">โปรดระบุอีเมลและรหัสผ่านเพื่อดำเนินการต่อ</p>
+                </div>
+
+                <form id="loginForm">
+                    <div class="mb-4">
+                        <label for="adminEmail" class="form-label">อีเมลผู้ดูแล</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-envelope"></i></span>
+                            <input type="email" class="form-control border-start-0" id="adminEmail"
+                                placeholder="กรุณากรอกอีเมลหรือชื่อผู้ใช้" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="adminPassword" class="form-label">รหัสผ่าน</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0"><i
+                                    class="bi bi-shield-lock"></i></span>
+                            <input type="password" class="form-control border-start-0" id="adminPassword"
+                                placeholder="กรุณากรอกรหัสผ่าน" required>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="bi bi-box-arrow-in-right me-2"></i> เข้าสู่ระบบ
+                        </button>
+                    </div>
+                </form>
+
+                <div class="mt-4 text-center">
+                    <a href="index.html" class="btn btn-outline-secondary btn-sm rounded-pill px-4">
+                        <i class="bi bi-arrow-left me-2"></i>กลับสู่หน้าหลักสำหรับนักเรียน
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Section (แสดงหลังล็อกอิน) -->
+    <div id="dashboardSection" class="dashboard-container d-none">
+        <!-- Modern Glass Navbar -->
+        <nav class="navbar navbar-expand-lg fixed-top mb-4">
+            <div class="container">
+                <a class="navbar-brand" href="#">
+                    <div class="logo-circle">
+                        <img src="logo.png" alt="Logo">
+                    </div>
+                    <div class="brand-text">
+                        ระบบจัดการข้อมูล<br>
+                        <small>สภานักเรียนโรงเรียนสุรวิทยาคาร</small>
+                    </div>
+                </a>
+                <div class="ms-auto d-flex align-items-center">
+                    <div class="d-none d-md-block text-white text-end me-3">
+                        <div class="fw-bold" id="adminName">Admin User</div>
+                        <small class="text-white-50">ผู้ดูแลระบบ</small>
+                    </div>
+                    <button class="btn btn-outline-light btn-sm px-3 rounded-pill" id="logoutBtn">
+                        <i class="bi bi-box-arrow-right me-1"></i> ออกจากระบบ
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container" style="padding-top: 100px;">
+            <!-- Header Section -->
+            <div class="row mb-5">
+                <div class="col-12 text-center section-header">
+                    <h2 class="section-title">ภาพรวมระบบร้องเรียน</h2>
+                    <p class="section-subtitle">จัดการข้อมูลและติดตามสถานะการร้องเรียนล่าสุดจากนักเรียน</p>
+                </div>
+            </div>
+
+            <!-- Statistics Cards -->
+            <div class="row mb-3" id="statsCards">
+                <!-- Cards will be populated by admin.js -->
+            </div>
+
+            <!-- Complaint Table Card -->
+            <div class="card form-card mb-5 border-0">
+                <div class="card-header bg-white py-4 border-0">
+                    <div
+                        class="toolbox-header d-flex flex-column flex-xl-row align-items-center justify-content-between gap-4">
+                        <!-- Title Area -->
+                        <div class="title-area">
+                            <h5 class="mb-0 fw-bold d-flex align-items-center">
+                                <span class="premium-title-vbar me-3"></span>
+                                รายการร้องเรียนทั้งหมด
+                            </h5>
+                            <p class="text-muted small mb-0 mt-1 ms-4">จัดการและติดตามสถานะเรื่องร้องเรียนแบบเรียลไทม์
+                            </p>
+                        </div>
+
+                        <!-- Search & Filter Area -->
+                        <div
+                            class="tool-area d-flex flex-column flex-lg-row align-items-center gap-3 flex-grow-1 justify-content-end w-100">
+                            <!-- Search Form -->
+                            <div class="search-box-v2 flex-grow-1" style="max-width: 450px;">
+                                <div class="search-wrapper">
+                                    <i class="bi bi-search search-icon-v2"></i>
+                                    <input type="text" id="searchInput" class="form-control admin-search-input-v2"
+                                        placeholder="ค้นหา Ticket ID หรือ หัวข้อเรื่อง...">
+                                </div>
+                            </div>
+
+                            <!-- Filter Group -->
+                            <div class="filter-group d-flex gap-2">
+                                <div class="filter-item">
+                                    <div class="filter-label-v2"><i class="bi bi-folder-fill me-1"></i>หมวดหมู่</div>
+                                    <select id="categoryFilter" class="form-select admin-filter-select-v2">
+                                        <option value="">ทุกหมวดหมู่</option>
+                                        <option value="อาคารสถานที่">อาคารสถานที่</option>
+                                        <option value="ระบบการเรียนการสอน">ระบบการเรียนการสอน</option>
+                                        <option value="กิจกรรมนักเรียน">กิจกรรมนักเรียน</option>
+                                        <option value="สวัสดิการ">สวัสดิการ</option>
+                                        <option value="อื่นๆ">อื่นๆ</option>
+                                    </select>
+                                </div>
+                                <div class="filter-item">
+                                    <div class="filter-label-v2"><i class="bi bi-pin-angle-fill me-1"></i>สถานะ</div>
+                                    <select id="statusFilter" class="form-select admin-filter-select-v2">
+                                        <option value="">ทุกสถานะ</option>
+                                        <option value="waiting">รอรับเรื่อง</option>
+                                        <option value="accepted">รับเรื่องแล้ว</option>
+                                        <option value="in-progress">ดำเนินการ</option>
+                                        <option value="resolved">เสร็จสิ้น</option>
+                                        <option value="rejected">ไม่รับเรื่อง</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Action Group -->
+                            <div class="action-panel p-2 bg-light rounded-4 d-flex gap-2 shadow-sm border">
+                                <button class="btn btn-action-tool refresh-btn" onclick="loadDashboardData()"
+                                    title="รีเฟรช">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                                <div class="vr mx-1 my-auto shadow-sm" style="height: 25px;"></div>
+                                <button class="btn btn-action-tool csv-btn" id="exportDataBtn" title="ส่งออก CSV">
+                                    <i class="bi bi-file-earmark-spreadsheet"></i>
+                                </button>
+                                <button class="btn btn-action-tool pdf-btn" id="exportPDFBtn" title="ส่งออก PDF">
+                                    <i class="bi bi-file-earmark-pdf"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light text-secondary">
+                                <tr>
+                                    <th class="ps-4">Ticket ID</th>
+                                    <th>หัวข้อ</th>
+                                    <th>หมวดหมู่</th>
+                                    <th>สถานที่</th>
+                                    <th>วันที่พบปัญหา</th>
+                                    <th>ผู้ร้องเรียน</th>
+                                    <th>วันที่แจ้ง</th>
+                                    <th>สถานะ</th>
+                                    <th class="pe-4 text-center">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="complaintsTableBody">
+                                <!-- Rows will be populated by admin.js -->
+                                <tr>
+                                    <td colspan="7" class="text-center py-5">
+                                        <div class="spinner-border text-success" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer bg-light border-0 py-3 text-center">
+                    <small class="text-muted"><i class="bi bi-clock-history me-1"></i> ข้อมูลจะถูกอัปเดตแบบเรียลไทม์
+                        (Real-time)</small>
+                </div>
+            </div>
+
+            <!-- Visual Charts -->
+            <div class="row mb-5">
+                <div class="col-lg-6 mb-3">
+                    <div class="card border-0 shadow-sm h-100 rounded-4">
+                        <div class="card-body p-4">
+                            <h6 class="fw-bold mb-4 text-dark"><i
+                                    class="bi bi-pie-chart-fill me-2 text-success"></i>สัดส่วนสถานะการดำเนินงาน</h6>
+                            <div style="height: 300px; position: relative;">
+                                <canvas id="statusChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6 mb-3">
+                    <div class="card border-0 shadow-sm h-100 rounded-4">
+                        <div class="card-body p-4">
+                            <h6 class="fw-bold mb-4 text-dark"><i
+                                    class="bi bi-bar-chart-fill me-2 text-success"></i>เรื่องร้องเรียนแยกตามหมวดหมู่
+                            </h6>
+                            <div style="height: 300px; position: relative;">
+                                <canvas id="categoryChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- More Statistics and Charts -->
+            <div class="row mb-5">
+                <div class="col-lg-8 mb-3">
+                    <div class="card border-0 shadow-sm h-100 rounded-4">
+                        <div class="card-body p-4">
+                            <h6 class="fw-bold mb-4 text-dark"><i
+                                    class="bi bi-graph-up-arrow me-2 text-success"></i>สถิตการร้องเรียนรายเดือน (6
+                                เดือนล่าสุด)</h6>
+                            <div style="height: 300px; position: relative;">
+                                <canvas id="trendChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4 mb-3">
+                    <div class="card border-0 shadow-sm h-100 rounded-4">
+                        <div class="card-body p-4 text-center">
+                            <h6 class="fw-bold mb-4 text-dark text-start"><i
+                                    class="bi bi-people-fill me-2 text-success"></i>สัดส่วนผู้ร้องเรียน</h6>
+                            <div style="height: 250px; position: relative;" class="mb-4">
+                                <canvas id="reporterChart"></canvas>
+                            </div>
+                            <div id="averageResolutionTime" class="p-3 bg-light rounded-4">
+                                <small class="text-muted d-block">ระยะเวลาแก้ไขเฉลี่ย</small>
+                                <h4 class="fw-bold mb-0 text-success" id="avgTimeBox">-</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer mt-auto">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-lg-4 col-md-6">
+                    <div class="footer-logo mb-4">
+                        <div class="logo-circle me-2">
+                            <img src="logo.png" alt="Logo">
+                        </div>
+                        <div>
+                            <h5 class="mb-0">สภานักเรียนโรงเรียนสุรวิทยาคาร</h5>
+                            <p class="mb-0">ระบบจัดการหลังบ้าน</p>
+                        </div>
+                    </div>
+                    <p class="text-white-50 small">
+                        เรายินดีรับฟังทุกปัญหาและข้อเสนอแนะ
+                        เพื่อร่วมกันสร้างสังคมโรงเรียนสุรวิทยาคารให้ดียิ่งขึ้น
+                    </p>
+                </div>
+
+                <div class="col-lg-4 col-md-6">
+                    <h5 class="text-warning mb-4 fw-bold">ช่องทางติดต่อสภานักเรียน</h5>
+                    <ul class="list-unstyled footer-contact">
+                        <li class="mb-2">
+                            <i class="bi bi-geo-alt-fill me-2 text-warning"></i>
+                            โรงเรียนสุรวิทยาคาร เลขที่ 372 ถนนธนสาร ต.ในเมือง อ.เมือง จ.สุรินทร์ 32000
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-facebook me-2 text-primary"></i>
+                            <a href="https://www.facebook.com/SuraStudentCouncil" target="_blank"
+                                class="text-white text-decoration-none">สภานักเรียนโรงเรียนสุรวิทยาคาร</a>
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-instagram me-2" style="color: #E1306C;"></i>
+                            <a href="#" target="_blank"
+                                class="text-white text-decoration-none">สภานักเรียนโรงเรียนสุรวิทยาคาร</a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-4 col-md-12">
+                    <div class="footer-info text-lg-end">
+                        <h5 class="text-warning mb-4 fw-bold">เกี่ยวกับผู้พัฒนา</h5>
+                        <p class="mb-1 text-white">พัฒนาโดย <strong>นายธนากร แซ่จอง</strong></p>
+                        <p class="small text-white-50 mb-3">นักเรียนโรงเรียนสุรวิทยาคาร</p>
+                        <div class="social-links mt-3">
+                            <a href="https://github.com/Pooh191" target="_blank" class="social-btn github"><i
+                                    class="bi bi-github"></i></a>
+                            <a href="https://www.facebook.com/thanakorn.sae.jong.2024" target="_blank"
+                                class="social-btn facebook"><i class="bi bi-facebook"></i></a>
+                            <a href="https://www.instagram.com/thanakornsaejong6/" target="_blank"
+                                class="social-btn instagram"><i class="bi bi-instagram"></i></a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Copyright Row -->
+            <div class="row mt-5 pt-4 border-top border-white-10">
+                <div class="col-12 text-center">
+                    <p class="mb-0 small text-white-50">
+                        © 2026 สภานักเรียนโรงเรียนสุรวิทยาคาร | พัฒนาโดย <strong>นายธนากร
+                            แซ่จอง</strong>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Firebase Configuration -->
+    <script src="firebase-config.js"></script>
+
+    <!-- Floating Support Icon (FAB) -->
+    <div class="support-fab">
+        <div class="fab-icon">
+            <i class="bi bi-info-circle-fill"></i>
+        </div>
+        <div class="fab-label">
+            หากพบปัญหากรุณาติดต่อผู้พัฒนาเว็บไซต์
+        </div>
+    </div>
+
+    <!-- Cookie Consent Banner -->
+    <div id="cookieConsent" class="cookie-consent">
+        <div class="cookie-content">
+            <div class="cookie-icon">
+                <i class="bi bi-cookie"></i>
+            </div>
+            <div class="cookie-text">
+                <h5>นโยบายคุกกี้ (Cookie Policy)</h5>
+                <p>เราใช้คุกกี้เพื่อเพิ่มประสิทธิภาพและประสบการณ์ที่ดีในการใช้งานระบบบริหารจัดการ</p>
+            </div>
+        </div>
+        <div class="cookie-actions">
+            <button id="declineCookies" class="btn-cookie-decline">ปฏิเสธ</button>
+            <button id="acceptCookies" class="btn-cookie-accept">ยอมรับคุกกี้</button>
+        </div>
+    </div>
+
+    <!-- Admin Script -->
+    <script src="admin.js"></script>
+</body>
+
+</html>

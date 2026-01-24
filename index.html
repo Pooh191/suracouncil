@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบร้องเรียนออนไลน์ | สภานักเรียนโรงเรียนสุรวิทยาคาร</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+    <!-- Google Fonts - Kanit -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Flatpickr (Modern Date Picker) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
+</head>
+
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="">
+                <div class="d-flex align-items-center">
+                    <div class="logo-circle me-2">
+                        <img src="logo.png" alt="Logo">
+                    </div>
+                    <span
+                        class="brand-text">ระบบร้องเรียนออนไลน์<br><small>สภานักเรียนโรงเรียนสุรวิทยาคาร</small></span>
+                </div>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#home">หน้าแรก</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#complaint-form">แจ้งเรื่อง</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#tracking">ติดตามสถานะ</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-bs-toggle="modal"
+                            data-bs-target="#faqModal">คำถามที่พบบ่อย</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="admin.html" target="_blank">ผู้ดูแลระบบ</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero-section">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <h1 class="hero-title">ระบบร้องเรียนออนไลน์</h1>
+                    <h2 class="hero-subtitle">สภานักเรียนโรงเรียนสุรวิทยาคาร</h2>
+                    <p class="hero-description">
+                        ช่องทางในการแจ้งเรื่องร้องเรียน แนะนำ และเสนอความคิดเห็น
+                        เพื่อร่วมกันพัฒนาชุมชนโรงเรียนของเราให้ดียิ่งขึ้น
+                    </p>
+                    <div class="d-flex flex-wrap gap-3 mt-4">
+                        <a href="#complaint-form" class="btn btn-warning btn-lg">
+                            แจ้งเรื่องทันที
+                        </a>
+                        <a href="#tracking" class="btn btn-outline-light btn-lg">
+                            ติดตามสถานะ
+                        </a>
+                        <button class="btn btn-link text-white-50 text-decoration-none mt-2 mt-md-0"
+                            data-bs-toggle="modal" data-bs-target="#faqModal">
+                            <i class="bi bi-question-circle me-1"></i> คำถามที่พบบ่อย?
+                        </button>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="hero-image mt-4 mt-lg-0">
+                        <div class="floating-icon">✍️</div>
+                        <div class="floating-icon">📋</div>
+                        <div class="floating-icon">✅</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Complaint Form Section -->
+    <section id="complaint-form" class="section-padding">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-lg-10">
+                    <div class="section-header text-center mb-5">
+                        <h2 class="section-title">แบบฟอร์มแจ้งเรื่องร้องเรียน</h2>
+                        <p class="section-subtitle">กรุณากรอกข้อมูลให้ครบถ้วนเพื่อให้เราสามารถช่วยเหลือท่านได้</p>
+                    </div>
+
+                    <div class="card form-card">
+                        <div class="card-body p-4 p-md-5">
+                            <form id="complaintForm">
+                                <div class="row">
+                                    <!-- หัวข้อเรื่อง -->
+                                    <div class="col-md-12 mb-3">
+                                        <label for="title" class="form-label">หัวข้อเรื่อง</label>
+                                        <input type="text" class="form-control" id="title" required>
+                                    </div>
+
+                                    <!-- ประเภทเรื่อง -->
+                                    <div class="col-md-6 mb-3">
+                                        <label for="category" class="form-label">ประเภทเรื่อง</label>
+                                        <select class="form-select" id="category" required>
+                                            <option value="" selected disabled>เลือกประเภทเรื่อง</option>
+                                            <option value="อาคารสถานที่">อาคารสถานที่</option>
+                                            <option value="ระบบการเรียนการสอน">ระบบการเรียนการสอน</option>
+                                            <option value="กิจกรรมนักเรียน">กิจกรรมนักเรียน</option>
+                                            <option value="สวัสดิการ">สวัสดิการ</option>
+                                            <option value="อื่นๆ">อื่นๆ</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- ระบุประเภทเรื่องอื่นๆ (ซ่อนไว้เริ่มต้น) -->
+                                    <div class="col-md-6 mb-3" id="otherCategoryGroup" style="display: none;">
+                                        <label for="otherCategory" class="form-label">โปรดระบุประเภทเรื่อง</label>
+                                        <input type="text" class="form-control" id="otherCategory"
+                                            placeholder="ระบุประเภทเรื่องที่ต้องการแจ้ง">
+                                    </div>
+
+                                    <!-- ประเภทผู้แจ้ง -->
+                                    <div class="col-md-6 mb-3">
+                                        <label for="reporterType" class="form-label">ประเภทผู้แจ้ง</label>
+                                        <select class="form-select" id="reporterType" required>
+                                            <option value="" selected disabled>เลือกประเภทผู้แจ้ง</option>
+                                            <option value="นักเรียน">นักเรียน</option>
+                                            <option value="ครูบุคลากร">ครูบุคลากร</option>
+                                            <option value="ผู้ปกครอง">ผู้ปกครอง</option>
+                                            <option value="ผู้มาติดต่อราชการ">ผู้มาติดต่อราชการ</option>
+                                            <option value="อื่นๆ">อื่นๆ</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- ระบุประเภทผู้แจ้งอื่นๆ (ซ่อนไว้เริ่มต้น) -->
+                                    <div class="col-md-6 mb-3" id="otherReporterTypeGroup" style="display: none;">
+                                        <label for="otherReporterType" class="form-label">โปรดระบุประเภทผู้แจ้ง</label>
+                                        <input type="text" class="form-control" id="otherReporterType"
+                                            placeholder="ระบุประเภทผู้แจ้ง">
+                                    </div>
+
+                                    <!-- สถานที่/อาคารที่เกิดปัญหา -->
+                                    <div class="col-md-6 mb-3">
+                                        <label for="location" class="form-label">สถานที่ / อาคารที่เกิดปัญหา</label>
+                                        <input type="text" class="form-control" id="location"
+                                            placeholder="เช่น อาคาร 3 ชั้น 2 หรือ สนามฟุตบอล" required>
+                                    </div>
+
+                                    <!-- วันที่ที่เกิดปัญหา -->
+                                    <div class="col-md-6 mb-3">
+                                        <label for="incidentDate" class="form-label">วันที่พบปัญหา</label>
+                                        <div class="date-input-group">
+                                            <i class="bi bi-calendar-check"></i>
+                                            <input type="date" class="form-control" id="incidentDate" required>
+                                        </div>
+                                    </div>
+
+                                    <!-- ชื่อ-นามสกุล -->
+                                    <div class="col-md-6 mb-3">
+                                        <div id="reporterNameGroup">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <label for="reporterName" class="form-label mb-0">ชื่อ-นามสกุล</label>
+                                                <div class="form-check mb-0">
+                                                    <input class="form-check-input" type="checkbox" id="anonymous">
+                                                    <label class="form-check-label small" for="anonymous">
+                                                        ไม่ระบุตัวตน
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <input type="text" class="form-control" id="reporterName"
+                                                placeholder="ระบุชื่อของคุณ" required>
+                                        </div>
+                                    </div>
+
+                                    <!-- อีเมล -->
+                                    <div class="col-md-6 mb-3">
+                                        <label for="reporterEmail" class="form-label">อีเมลสำหรับรับ Ticket ID <span
+                                                class="text-danger">*</span></label>
+                                        <input type="email" class="form-control" id="reporterEmail"
+                                            placeholder="กรอกอีเมลของท่านเพื่อติดตามสถานะคำร้องเรียน" required>
+                                    </div>
+
+                                    <!-- รายละเอียด -->
+                                    <div class="col-12 mb-3">
+                                        <label for="details" class="form-label">รายละเอียด</label>
+                                        <textarea class="form-control" id="details" rows="5" required></textarea>
+                                    </div>
+
+                                    <!-- อัปโหลดรูปภาพ -->
+                                    <div class="col-12 mb-4">
+                                        <label for="imageUpload" class="form-label">อัปโหลดรูปภาพหลักฐาน
+                                            (เลือกได้ไม่เกิน 3 รูป, รวมไม่เกิน 5MB)</label>
+                                        <div class="upload-container border-2 border-dashed rounded-4 p-4 text-center bg-light shadow-sm"
+                                            style="border: 2px dashed #cbd5e1; cursor: pointer;">
+                                            <input class="form-control d-none" type="file" id="imageUpload"
+                                                accept="image/*" multiple>
+                                            <label for="imageUpload" class="mb-0 w-100 cursor-pointer">
+                                                <i class="bi bi-images fs-1 text-success mb-2 d-block"></i>
+                                                <span class="d-block fw-bold">คลิกที่นี่เพื่อเลือกรูปภาพหลักฐาน</span>
+                                                <small class="text-muted">คุณสามารถเลือกได้มากกว่า 1 รูป</small>
+                                            </label>
+                                        </div>
+                                        <div id="imagePreviewContainer" class="row g-2 mt-3"></div>
+                                    </div>
+
+                                    <!-- ยอมรับความเป็นส่วนตัว -->
+                                    <div class="col-12 mb-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="privacyConsent"
+                                                required>
+                                            <label class="form-check-label" for="privacyConsent">
+                                                ฉันยอมรับ <a href="#" data-bs-toggle="modal"
+                                                    data-bs-target="#privacyModal">นโยบายความเป็นส่วนตัว</a>
+                                                และยินยอมให้สภานักเรียนจัดเก็บข้อมูล <span class="text-danger">*</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- ปุ่มส่งฟอร์ม -->
+                                    <div class="col-12">
+                                        <button type="submit" class="btn btn-success btn-lg w-100">
+                                            ส่งคำร้องเรียน
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tracking Section -->
+    <section id="tracking" class="section-padding bg-light">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="section-header text-center mb-5">
+                        <h2 class="section-title">ติดตามสถานะคำร้องเรียน</h2>
+                        <p class="section-subtitle">กรอกรหัส Ticket ID เพื่อติดตามความคืบหน้าของเรื่องที่แจ้ง</p>
+                    </div>
+
+                    <div class="card tracking-card">
+                        <div class="card-body p-4">
+                            <div class="mb-4">
+                                <label for="ticketId" class="form-label">รหัส Ticket ID</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="ticketId" placeholder="เช่น: SN-0000">
+                                    <button class="btn btn-warning" type="button" id="trackBtn">ติดตาม</button>
+                                </div>
+                                <div class="form-text mt-2 text-muted"><i class="bi bi-info-circle me-1"></i>
+                                    รหัสจะถูกส่งให้หลังจากการแจ้งเรื่องสำเร็จ</div>
+                            </div>
+
+                            <!-- ผลลัพธ์การติดตาม -->
+                            <div id="trackingResult" class="d-none">
+                                <!-- New Tracking Result Design -->
+                                <div class="tracking-details mb-5">
+                                    <!-- Header Ticket ID -->
+                                    <div
+                                        class="result-header p-4 mb-4 rounded-4 text-white d-flex flex-wrap justify-content-between align-items-center">
+                                        <div>
+                                            <small class="opacity-75 d-block mb-1 text-uppercase ls-1">Ticket ID</small>
+                                            <h2 class="mb-0 fw-bold" style="font-family: 'Kanit'; letter-spacing: 1px;">
+                                                #<span id="resultTicketId">SN-xxxx</span></h2>
+                                        </div>
+                                        <div class="status-badge-container mt-3 mt-md-0">
+                                            <span id="resultStatus"
+                                                class="badge bg-white text-success rounded-pill shadow-sm">สถานะ</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Grid Layout for Details -->
+                                    <div class="row g-3">
+                                        <!-- หัวข้อเรื่อง -->
+                                        <div class="col-12">
+                                            <div class="info-card h-100">
+                                                <div class="d-flex align-items-start">
+                                                    <div
+                                                        class="icon-circle bg-success-subtle text-success me-3 flex-shrink-0">
+                                                        <i class="bi bi-chat-quote-fill"></i>
+                                                    </div>
+                                                    <div>
+                                                        <div class="info-label">หัวข้อเรื่อง</div>
+                                                        <h5 id="resultTitle" class="info-value mb-0">หัวข้อเรื่อง</h5>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- หมวดหมู่ -->
+                                        <div class="col-md-6 col-lg-4">
+                                            <div class="info-card h-100">
+                                                <div class="d-flex align-items-center mb-3">
+                                                    <i class="bi bi-tags-fill me-2 text-primary"></i>
+                                                    <span class="info-label mb-0 text-muted">หมวดหมู่</span>
+                                                </div>
+                                                <div>
+                                                    <span id="resultCategory"
+                                                        class="badge bg-light text-dark border px-3 py-2 rounded-pill fs-6 fw-normal">ทั่วไป</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- สถานที่ -->
+                                        <div class="col-md-6 col-lg-4">
+                                            <div class="info-card h-100">
+                                                <div class="d-flex align-items-center mb-3">
+                                                    <i class="bi bi-geo-alt-fill me-2 text-danger"></i>
+                                                    <span class="info-label mb-0 text-muted">สถานที่</span>
+                                                </div>
+                                                <div>
+                                                    <span id="resultLocation"
+                                                        class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2 rounded-pill fs-6 fw-normal">-</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- วันที่พบปัญหา -->
+                                        <div class="col-md-12 col-lg-4">
+                                            <div class="info-card h-100">
+                                                <div class="d-flex align-items-center mb-2">
+                                                    <i class="bi bi-calendar-event me-2 text-info"></i>
+                                                    <span class="info-label mb-0 text-muted">วันที่พบปัญหา</span>
+                                                </div>
+                                                <p id="resultIncidentDate" class="info-value info-value-big mb-0">-</p>
+                                            </div>
+                                        </div>
+
+                                        <!-- ข้อมูลเพิ่มเติม -->
+                                        <div class="col-12">
+                                            <div class="info-card">
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <div class="d-flex align-items-center">
+                                                            <div class="icon-circle bg-light text-secondary me-3"
+                                                                style="width: 40px; height: 40px; font-size: 1.2rem;">
+                                                                <i class="bi bi-person-fill"></i>
+                                                            </div>
+                                                            <div>
+                                                                <div class="info-label" style="font-size: 0.75rem;">
+                                                                    ประเภทผู้แจ้ง</div>
+                                                                <div id="resultReporterType" class="fw-bold">-</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div
+                                                            class="d-flex align-items-center border-start ps-md-4 mt-3 mt-md-0 border-light-subtle">
+                                                            <!-- Border start only on desktop -->
+                                                            <div class="icon-circle bg-light text-secondary me-3"
+                                                                style="width: 40px; height: 40px; font-size: 1.2rem;">
+                                                                <i class="bi bi-send-fill"></i>
+                                                            </div>
+                                                            <div>
+                                                                <div class="info-label" style="font-size: 0.75rem;">
+                                                                    วันที่ส่งเรื่อง</div>
+                                                                <div id="resultDate" class="fw-bold">-</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>
+
+                                <!-- ส่วนแสดงการดำเนินการจากผู้ดูแล -->
+                                <div id="adminFeedbackContainer"
+                                    class="mt-4 p-4 border-start border-4 border-success bg-success-subtle rounded-4 d-none">
+                                    <h6 class="fw-bold text-success mb-2"><i
+                                            class="bi bi-info-circle-fill me-2"></i>การดำเนินการจากผู้ดูแล:</h6>
+                                    <p id="adminFeedbackText" class="mb-3"></p>
+                                    <div class="d-none mt-2">
+                                        <a id="adminFeedbackImageLink" href="#" target="_blank">
+                                            <img id="adminFeedbackImage" src="" class="img-fluid rounded-3 border"
+                                                style="max-height: 200px;" alt="หลักฐานการดำเนินการ">
+                                        </a>
+                                        <p class="small text-muted mt-1">(คลิกที่รูปเพื่อดูขนาดใหญ่)</p>
+                                    </div>
+                                </div>
+
+                                <!-- Progress Bar -->
+                                <div class="tracking-progress mb-5">
+                                    <h5 class="card-title mb-3">ความคืบหน้า</h5>
+                                    <div class="progress-container">
+                                        <div class="progress-line"></div>
+                                        <!-- Step 1: รอรับเรื่อง -->
+                                        <div class="step active">
+                                            <div class="step-icon">1</div>
+                                            <div class="step-label">รอรับเรื่อง</div>
+                                        </div>
+                                        <!-- Step 2: รับเรื่อง -->
+                                        <div class="step">
+                                            <div class="step-icon">2</div>
+                                            <div class="step-label">รับเรื่อง</div>
+                                        </div>
+                                        <!-- Step 3: ดำเนินการ -->
+                                        <div class="step">
+                                            <div class="step-icon">3</div>
+                                            <div class="step-label">ดำเนินการ</div>
+                                        </div>
+                                        <!-- Step 4: เสร็จสิ้น -->
+                                        <div class="step">
+                                            <div class="step-icon">4</div>
+                                            <div class="step-label">เสร็จสิ้น</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Timeline Section -->
+                                <div id="trackingTimeline" class="mt-4">
+                                    <h6 class="fw-bold mb-3 border-bottom pb-2"><i
+                                            class="bi bi-clock-history me-2"></i>ประวัติการดำเนินการ (Activities)</h6>
+                                    <ul class="timeline-v2">
+                                        <!-- Timeline items will be rendered here dynamically (todo later) or for now just a placeholder -->
+                                        <li class="timeline-item-v2">
+                                            <div class="timeline-marker"></div>
+                                            <div class="timeline-content">
+                                                <div class="timeline-date small text-muted" id="timelineCreatedDate">-
+                                                </div>
+                                                <div class="timeline-title fw-bold">สร้างคำร้องเรียน</div>
+                                                <p class="timeline-desc small mb-0">นักเรียนส่งเรื่องเข้าสู่ระบบ</p>
+                                            </div>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ข้อความเมื่อไม่พบข้อมูล -->
+                        <div id="noResult" class="alert alert-info d-none text-center">
+                            <i class="bi bi-info-circle me-2"></i>กรุณากรอกรหัส Ticket ID เพื่อติดตามสถานะ
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+    </section>
+
+
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-lg-4 col-md-6">
+                    <div class="footer-logo mb-4">
+                        <div class="logo-circle me-2">
+                            <img src="logo.png" alt="Logo">
+                        </div>
+                        <div>
+                            <h5 class="mb-0">สภานักเรียนโรงเรียนสุรวิทยาคาร</h5>
+                            <p class="mb-0">ระบบร้องเรียนออนไลน์</p>
+                        </div>
+                    </div>
+                    <p class="text-white-50 small">
+                        เรายินดีรับฟังทุกปัญหาและข้อเสนอแนะ
+                        เพื่อร่วมกันสร้างสังคมโรงเรียนสุรวิทยาคารให้ดียิ่งขึ้น
+                    </p>
+                </div>
+
+                <div class="col-lg-4 col-md-6">
+                    <h5 class="text-warning mb-4 fw-bold">ช่องทางติดต่อสภานักเรียน</h5>
+                    <ul class="list-unstyled footer-contact">
+                        <li class="mb-2">
+                            <i class="bi bi-geo-alt-fill me-2 text-warning"></i>
+                            โรงเรียนสุรวิทยาคาร เลขที่ 372 ถนนธนสาร ต.ในเมือง อ.เมือง จ.สุรินทร์ 32000
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-facebook me-2 text-primary"></i>
+                            <a href="https://www.facebook.com/SuraStudentCouncil" target="_blank"
+                                class="text-white text-decoration-none">สภานักเรียนโรงเรียนสุรวิทยาคาร</a>
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-instagram me-2" style="color: #E1306C;"></i>
+                            <a href="#" target="_blank"
+                                class="text-white text-decoration-none">สภานักเรียนโรงเรียนสุรวิทยาคาร</a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-4 col-md-12">
+                    <div class="footer-info text-lg-end">
+                        <h5 class="text-warning mb-4 fw-bold">เกี่ยวกับผู้พัฒนา</h5>
+                        <p class="mb-1 text-white">พัฒนาโดย <strong>นายธนากร แซ่จอง</strong></p>
+                        <p class="small text-white-50 mb-3">นักเรียนโรงเรียนสุรวิทยาคาร</p>
+                        <div class="social-links mt-3">
+                            <a href="https://github.com/Pooh191" target="_blank" class="social-btn github"><i
+                                    class="bi bi-github"></i></a>
+                            <a href="https://www.facebook.com/thanakorn.sae.jong.2024" target="_blank"
+                                class="social-btn facebook"><i class="bi bi-facebook"></i></a>
+                            <a href="https://www.instagram.com/thanakornsaejong6/" target="_blank"
+                                class="social-btn instagram"><i class="bi bi-instagram"></i></a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Copyright Row -->
+            <div class="row mt-5 pt-4 border-top border-white-10">
+                <div class="col-12 text-center">
+                    <p class="mb-0 small text-white-50">
+                        © 2026 สภานักเรียนโรงเรียนสุรวิทยาคาร | พัฒนาโดย <strong>นายธนากร
+                            แซ่จอง</strong>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <!-- Modal สำหรับแสดง Ticket ID -->
+    <div class="modal fade" id="successModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-5 overflow-hidden">
+                <div class="modal-body p-5 text-center">
+                    <div class="success-animation mb-4">
+                        <div class="check-icon">
+                            <span class="icon-line line-tip"></span>
+                            <span class="icon-line line-long"></span>
+                            <div class="icon-circle"></div>
+                            <div class="icon-fix"></div>
+                        </div>
+                    </div>
+                    <h3 class="fw-bold text-dark mb-2">ส่งคำร้องเรียนสำเร็จ!</h3>
+                    <p class="text-muted mb-4">ระบบได้รับเรื่องของคุณแล้ว กรุณาเก็บรหัส Ticket ID
+                        นี้เพื่อใช้ติดตามความเคลื่อนไหว</p>
+
+                    <div class="ticket-container p-4 rounded-4 bg-light border mb-4 position-relative">
+                        <small
+                            class="text-uppercase text-muted fw-bold d-block mb-2 ls-1">รหัสติดตามเรื่องของคุณ</small>
+                        <div class="d-flex align-items-center justify-content-center gap-3">
+                            <h1 id="generatedTicketId" class="mb-0 text-success fw-bold tracking-tight"></h1>
+                            <button onclick="copyTicketId()"
+                                class="btn btn-outline-success btn-sm rounded-pill px-3 shadow-sm border-2">
+                                <i class="bi bi-clipboard2-plus me-1"></i> คัดลอก
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info border-0 rounded-4 p-3 small mb-4">
+                        <i class="bi bi-info-circle-fill me-2"></i> สภานักเรียนจะตรวจสอบและอัปเดตสถานะให้เร็วที่สุด
+                    </div>
+
+                    <button type="button" class="btn btn-success btn-lg w-100 rounded-pill py-3 fw-bold shadow-sm"
+                        data-bs-dismiss="modal">
+                        เข้าใจแล้ว
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal สำหรับนโยบายความเป็นส่วนตัว -->
+    <div class="modal fade" id="privacyModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="bi bi-shield-check me-2"></i>นโยบายความเป็นส่วนตัว</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>1. การเก็บรวบรวมข้อมูล</h6>
+                    <p>สภานักเรียนจะเก็บรวบรวมข้อมูลส่วนบุคคลที่ท่านระบุในฟอร์ม เช่น ชื่อ-นามสกุล อีเมล
+                        และข้อมูลการร้องเรียน เพื่อใช้ในการประสานงานติดตามเรื่องเท่านั้น</p>
+
+                    <h6>2. วัตถุประสงค์</h6>
+                    <p>เพื่อนำข้อมูลไปตรวจสอบข้อเท็จจริง และดำเนินการแก้ไขปัญหาตามกระบวนการของโรงเรียนสุรวิทยาคาร</p>
+
+                    <h6>3. การคุ้มครองข้อมูล</h6>
+                    <p>ข้อมูลของท่านจะถูกเก็บรักษาเป็นความลับ
+                        และจะเข้าถึงได้เฉพาะผู้มีส่วนเกี่ยวข้องในกระบวนการพิจารณาเรื่องร้องเรียนเท่านั้น</p>
+
+                    <h6>4. ระยะเวลาการเก็บข้อมูล</h6>
+                    <p>เราจะเก็บข้อมูลไว้จนกว่ากระบวนการดำเนินการจะเสร็จสิ้น
+                        และจะจัดเก็บไว้ในฐานข้อมูลสถิติของสภานักเรียน</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ปิด</button>
+                    <button type="button" class="btn btn-success" data-bs-dismiss="modal">รับทราบ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Firebase Configuration -->
+    <script src="firebase-config.js"></script>
+
+    <!-- Floating Support Icon (FAB) -->
+    <div class="support-fab">
+        <div class="fab-icon">
+            <i class="bi bi-info-circle-fill"></i>
+        </div>
+        <div class="fab-label">
+            หากพบปัญหากรุณาติดต่อสภานักเรียน หรือผู้พัฒนาเว็บไซต์
+        </div>
+    </div>
+
+    <!-- Cookie Consent Banner -->
+    <div id="cookieConsent" class="cookie-consent">
+        <div class="cookie-content">
+            <div class="cookie-icon">
+                <i class="bi bi-cookie"></i>
+            </div>
+            <div class="cookie-text">
+                <h5>นโยบายคุกกี้ (Cookie Policy)</h5>
+                <p>เราใช้คุกกี้เพื่อเพิ่มประสิทธิภาพและประสบการณ์ที่ดีในการใช้งานเว็บไซต์
+                    คุณสามารถเลือกยอมรับหรือปฏิเสธการใช้งานคุกกี้ได้</p>
+            </div>
+        </div>
+        <div class="cookie-actions">
+            <button id="declineCookies" class="btn-cookie-decline">ปฏิเสธ</button>
+            <button id="acceptCookies" class="btn-cookie-accept">ยอมรับคุกกี้</button>
+        </div>
+    </div>
+
+    <!-- Main Script -->
+    <script src="script.js"></script>
+    <!-- FAQ Modal -->
+    <div class="modal fade" id="faqModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg rounded-5 overflow-hidden">
+                <div class="modal-header bg-success text-white p-4">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-question-circle-fill me-2"></i> คำถามที่พบบ่อย (FAQ)
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4 p-md-5">
+                    <div class="accordion accordion-flush premium-accordion" id="faqModalAccordion">
+                        <!-- FAQ 1 -->
+                        <div class="accordion-item shadow-sm mb-3 border rounded-4 overflow-hidden">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#faqM1">
+                                    <i class="bi bi-shield-lock-fill me-3 text-success"></i>
+                                    การแจ้งเรื่องแบบไม่ระบุตัวตนปลอดภัยจริงไหม?
+                                </button>
+                            </h2>
+                            <div id="faqM1" class="accordion-collapse collapse" data-bs-parent="#faqModalAccordion">
+                                <div class="accordion-body text-muted">
+                                    ปลอดภัยแน่นอนครับ! ระบบจะทำการซ่อนข้อมูลผู้แจ้งออกจากฐานข้อมูลหลัก
+                                    แม้แต่แอดมินหรือสภานักเรียนก็ไม่สามารถดูชื่อ-นามสกุลของคุณได้หากคุณเลือกตัวเลือก
+                                    "ไม่ระบุตัวตน"
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- FAQ 2 -->
+                        <div class="accordion-item shadow-sm mb-3 border rounded-4 overflow-hidden">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#faqM2">
+                                    <i class="bi bi-clock-history me-3 text-success"></i>
+                                    ใช้เวลานานแค่ไหนในการดำเนินการ?
+                                </button>
+                            </h2>
+                            <div id="faqM2" class="accordion-collapse collapse" data-bs-parent="#faqModalAccordion">
+                                <div class="accordion-body text-muted">
+                                    โดยปกติสภานักเรียนจะเข้ามารับเรื่องภายใน 24-48 ชั่วโมง
+                                    และระยะเวลาการดำเนินการจะขึ้นอยู่กับความยากง่ายของปัญหา
+                                    หากเป็นเรื่องเร่งด่วนทีมงานจะรีบประสานงานฝ่ายที่เกี่ยวข้องทันทีครับ
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- FAQ 3 -->
+                        <div class="accordion-item shadow-sm mb-3 border rounded-4 overflow-hidden">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#faqM3">
+                                    <i class="bi bi-images me-3 text-success"></i> สามารถแนบรูปภาพได้กี่รูป?
+                                </button>
+                            </h2>
+                            <div id="faqM3" class="accordion-collapse collapse" data-bs-parent="#faqModalAccordion">
+                                <div class="accordion-body text-muted">
+                                    เพื่อนๆ สามารถแนบรูปภาพหลักฐานได้สูงสุด **3 รูป** โดยรวมขนาดไม่เกิน 5MB
+                                    เพื่อให้แอดมินสามารถเห็นภาพปัญหาที่เกิดขึ้นได้อย่างชัดเจนที่สุด
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- FAQ 4 -->
+                        <div class="accordion-item shadow-sm mb-3 border rounded-4 overflow-hidden">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#faqM4">
+                                    <i class="bi bi-journal-check me-3 text-success"></i>
+                                    สภานักเรียนจัดการเรื่องอะไรได้บ้าง?
+                                </button>
+                            </h2>
+                            <div id="faqM4" class="accordion-collapse collapse" data-bs-parent="#faqModalAccordion">
+                                <div class="accordion-body text-muted">
+                                    ทุกเรื่องที่เป็นประโยชน์ต่อส่วนรวมครับ เช่น อาคารสถานที่ชำรุด,
+                                    ข้อเสนอแนะเรื่องกิจกรรม, ปัญหาเรื่องสวัสดิการ หรือการปรับปรุงระบบการเรียนการสอน
+                                    (เรื่องส่วนตัวหรือการกลั่นแกล้งกันอาจมีการพิจารณาเป็นรายกรณี)
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- FAQ 5 -->
+                        <div class="accordion-item shadow-sm mb-3 border rounded-4 overflow-hidden">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#faqM5">
+                                    <i class="bi bi-key-fill me-3 text-success"></i> ถ้าจำ Ticket ID
+                                    ไม่ได้ต้องทำอย่างไร?
+                                </button>
+                            </h2>
+                            <div id="faqM5" class="accordion-collapse collapse" data-bs-parent="#faqModalAccordion">
+                                <div class="accordion-body text-muted">
+                                    หากระบุอีเมลไว้ ระบบจะส่ง Ticket ID ไปให้ทางอีเมลครับ
+                                    แต่ถ้าแจ้งแบบไม่ระบุตัวตนและลืมรหัส
+                                    แนะนำให้แจ้งเรื่องเข้ามาใหม่อีกครั้งพร้อมระบุว่าเป็นเรื่องเดิมที่แจ้งไว้ครับ
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0 justify-content-center p-3">
+                    <button type="button" class="btn btn-success px-5 rounded-pill"
+                        data-bs-dismiss="modal">เข้าใจแล้ว</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
