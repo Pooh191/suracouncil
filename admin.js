@@ -5,9 +5,23 @@ let unsubscribe = null; // สำหรับ real-time listener
 let statusChart = null; // สำหรับกราฟสถานะ
 let categoryChart = null; // สำหรับกราฟหมวดหมู่
 let trendChart = null; // สำหรับกราฟเทรนด์ประจำเดือน
-let reporterChart = null; // สำหรับกราฟประเภทผู้ส่งผลงาน
+let reporterChart = null; // สำหรับกราฟประเภทผู้ร้องเรียน
 let sessionInterval = null; // สำหรับเช็คเวลาหมดอายุ
+let userProfile = null; // สำหรับเก็บข้อมูลโปรไฟล์ผู้ใช้ปัจจุบัน
+let calendarSelectedMonth = new Date().getMonth(); // เดือนที่เลือกในปฏิทิน (0-11)
+let calendarSelectedYear = new Date().getFullYear(); // ปีที่เลือกในปฏิทิน
 const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 นาที (หน่วยเป็นมิลลิวินาที)
+
+// รายชื่อตำแหน่งที่กำหนด
+const POSITIONS = [
+    "แอดมิน",
+    "ประธานกรรมการสภานักเรียน",
+    "รองประธานกรรมการสภานักเรียน คนที่หนึ่ง",
+    "รองประธานกรรมการสภานักเรียน คนที่สอง",
+    "เลขานุการคณะกรรมการสภานักเรียน",
+    "กรรมการสภานักเรียน",
+    "อนุกรรมการสภานักเรียน"
+];
 
 // ===== ฟังก์ชันเริ่มต้น =====
 document.addEventListener('DOMContentLoaded', function () {
@@ -15,16 +29,53 @@ document.addEventListener('DOMContentLoaded', function () {
     complaintsCollection = db.collection("complaints");
 
     // ตรวจสอบสถานะการล็อกอิน
-    auth.onAuthStateChanged(user => {
+    auth.onAuthStateChanged(async user => {
         if (user) {
-            // ผู้ใช้ล็อกอินอยู่แล้ว
             currentUser = user;
-            showDashboard();
-            loadDashboardData();
-            generateSummary('weekly'); // เริ่มต้นด้วยการสรุปรายสัปดาห์
-            startSessionTimer(); // เริ่มจับเวลาเซสชัน
+
+            try {
+                // ดึงข้อมูลโปรไฟล์จาก Firestore
+                const userDoc = await db.collection("users").doc(user.uid).get();
+                if (userDoc.exists) {
+                    userProfile = userDoc.data();
+                    // บังคับให้เป็น superadmin ถ้าเป็นอีเมลตามที่กำหนด (ทำเพื่อความปลอดภัยกรณีข้อมูลใน DB ผิด)
+                    if (user.email && user.email.toLowerCase() === "admin@student.sura.ac.th") {
+                        userProfile.role = "superadmin";
+                    }
+                } else {
+                    // ถ้าไม่มีข้อมูลใน Firestore ให้สร้างโปรไฟล์ตั้งต้น
+                    userProfile = {
+                        role: (user.email && user.email.toLowerCase() === "admin@student.sura.ac.th") ? "superadmin" : "admin",
+                        displayName: user.email,
+                        position: "แอดมิน"
+                    };
+
+                    // บันทึกข้อมูลเบื้องต้นลง Firestore ด้วย
+                    await db.collection("users").doc(user.uid).set({
+                        email: user.email,
+                        displayName: userProfile.displayName,
+                        position: userProfile.position,
+                        role: userProfile.role,
+                        studentId: "",
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+
+                showDashboard();
+                loadDashboardData();
+                startSessionTimer();
+            } catch (error) {
+                console.error("Error fetching user profile:", error);
+                // Fallback กรณี error
+                userProfile = { role: "admin", displayName: user.email };
+                showDashboard();
+                loadDashboardData();
+                startSessionTimer();
+            }
         } else {
             // ยังไม่ล็อกอิน
+            currentUser = null;
+            userProfile = null;
             stopSessionTimer();
             showLogin();
         }
@@ -32,6 +83,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ตั้งค่า Event Listeners
     setupAdminEventListeners();
+    initCalendarSelectors();
 
     // ===== Cookie Consent Logic =====
     const cookieConsent = document.getElementById('cookieConsent');
@@ -73,10 +125,12 @@ function setupAdminEventListeners() {
     const searchInput = document.getElementById('searchInput');
     const categoryFilter = document.getElementById('categoryFilter');
     const statusFilter = document.getElementById('statusFilter');
+    const timeFilter = document.getElementById('timeFilter');
 
     if (searchInput) searchInput.addEventListener('input', () => loadComplaintsTable());
     if (categoryFilter) categoryFilter.addEventListener('change', () => loadComplaintsTable());
     if (statusFilter) statusFilter.addEventListener('change', () => loadComplaintsTable());
+    if (timeFilter) timeFilter.addEventListener('change', () => loadComplaintsTable());
 
     // ปุ่ม Export
     const exportBtn = document.getElementById('exportDataBtn');
@@ -87,6 +141,28 @@ function setupAdminEventListeners() {
     const exportPDFBtn = document.getElementById('exportPDFBtn');
     if (exportPDFBtn) {
         exportPDFBtn.addEventListener('click', exportToPDF);
+    }
+
+    // ปุ่มเปลี่ยนรหัสผ่านตนเอง
+    const changePasswordBtn = document.getElementById('changePasswordBtn');
+    if (changePasswordBtn) {
+        changePasswordBtn.addEventListener('click', handleChangeOwnPassword);
+    }
+
+    // ปุ่มจัดการผู้ใช้งาน
+    const manageUsersBtn = document.getElementById('manageUsersBtn');
+    if (manageUsersBtn) {
+        manageUsersBtn.addEventListener('click', showUserManagement);
+    }
+
+    const backToDashboardBtn = document.getElementById('backToDashboardBtn');
+    if (backToDashboardBtn) {
+        backToDashboardBtn.addEventListener('click', hideUserManagement);
+    }
+
+    const addUserBtn = document.getElementById('addUserBtn');
+    if (addUserBtn) {
+        addUserBtn.addEventListener('click', handleAddUser);
     }
 }
 
@@ -104,7 +180,13 @@ async function handleAdminLogin(e) {
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>กำลังเข้าสู่ระบบ...';
         submitBtn.disabled = true;
 
-        await auth.signInWithEmailAndPassword(email, password);
+        let finalEmail = email;
+        // ถ้าเป็นตัวเลข 5 หลัก ให้ถือว่าเป็นเลขประจำตัว
+        if (/^\d{5}$/.test(email)) {
+            finalEmail = `${email}@council.internal`;
+        }
+
+        await auth.signInWithEmailAndPassword(finalEmail, password);
 
         // บันทึกเวลาที่ล็อกอินลงใน localStorage
         localStorage.setItem('adminLoginTime', Date.now());
@@ -260,9 +342,57 @@ async function handleSessionTimeout() {
 function showDashboard() {
     document.getElementById('loginSection').classList.add('d-none');
     document.getElementById('dashboardSection').classList.remove('d-none');
+    document.getElementById('userManagementSection').classList.add('d-none');
 
-    // แสดงชื่อผู้ใช้
-    document.getElementById('adminName').textContent = currentUser.email;
+    // ตรวจสอบความปลอดภัยผ่านอีเมลโดยตรงร่วมด้วย
+    const isSuperAdmin = (currentUser && currentUser.email && currentUser.email.toLowerCase() === "admin@student.sura.ac.th") ||
+        (userProfile && userProfile.role === 'superadmin');
+
+    // แสดงชื่อและตำแหน่งผู้ใช้
+    if (currentUser) {
+        document.getElementById('adminName').textContent = (userProfile && userProfile.displayName) || currentUser.email;
+
+        // แสดงตำแหน่งที่ระบุในจัดการผู้ใช้
+        const positionSmall = document.querySelector('#adminName + small') || document.querySelector('.text-white-50');
+        if (positionSmall) {
+            if (currentUser && currentUser.email && currentUser.email.toLowerCase() === "admin@student.sura.ac.th") {
+                positionSmall.textContent = "แอดมินสูงสุด";
+            } else if (userProfile && userProfile.position) {
+                positionSmall.textContent = userProfile.position;
+            } else if (isSuperAdmin) {
+                positionSmall.textContent = "แอดมินสูงสุด";
+            } else {
+                positionSmall.textContent = "ผู้ดูแลระบบ";
+            }
+        }
+
+        // แสดงปุ่มจัดการผู้ใช้งาน
+        const manageBtn = document.getElementById('manageUsersBtn');
+        if (manageBtn) {
+            if (isSuperAdmin) {
+                manageBtn.classList.remove('d-none');
+            } else {
+                manageBtn.classList.add('d-none');
+            }
+        }
+    }
+}
+
+function showUserManagement() {
+    const isSuperAdmin = (currentUser && currentUser.email && currentUser.email.toLowerCase() === "admin@student.sura.ac.th") ||
+        (userProfile && userProfile.role === 'superadmin');
+
+    if (isSuperAdmin) {
+        document.getElementById('dashboardSection').classList.add('d-none');
+        document.getElementById('userManagementSection').classList.remove('d-none');
+        loadUsersTable();
+    } else {
+        showAdminAlert('คุณไม่มีสิทธิ์เข้าถึงส่วนนี้', 'error');
+    }
+}
+
+function hideUserManagement() {
+    showDashboard();
 }
 
 function showLogin() {
@@ -286,7 +416,7 @@ async function loadStatistics() {
         // ดึงข้อมูลทั้งหมด
         const snapshot = await complaintsCollection.get();
 
-        // คำนวณสถิติ
+        // คำนวณสถิติสถานะ
         let total = 0;
         let waiting = 0;
         let accepted = 0;
@@ -294,29 +424,39 @@ async function loadStatistics() {
         let inProgress = 0;
         let resolved = 0;
 
-        // สำหรับกราฟระดับชั้น
+        // คำนวณสถิติตามเวลา (รายวัน, รายสัปดาห์, รายเดือน)
+        let todayCount = 0;
+        let weekCount = 0;
+        let monthCount = 0;
+
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+        const sevenDaysAgo = now.getTime() - (7 * 24 * 60 * 60 * 1000);
+
+        // สำหรับปฏิทินรายวัน (เดือนปัจจุบัน)
+        const dailyCounts = {};
+
+        // สำหรับกราฟหมวดหมู่
         const categoryCounts = {
-            'มัธยมศึกษาปีที่ 1': 0,
-            'มัธยมศึกษาปีที่ 2': 0,
-            'มัธยมศึกษาปีที่ 3': 0,
-            'มัธยมศึกษาปีที่ 4': 0,
-            'มัธยมศึกษาปีที่ 5': 0,
-            'มัธยมศึกษาปีที่ 6': 0,
+            'อาคารสถานที่': 0,
+            'ระบบการเรียนการสอน': 0,
+            'กิจกรรมนักเรียน': 0,
+            'สวัสดิการ': 0,
             'อื่นๆ': 0
         };
 
-        // สำหรับกราฟผู้ส่งผลงาน
+        // สำหรับกราฟผู้ร้องเรียน
         const reporterCounts = {
-            'หัวหน้าห้อง': 0,
-            'รองหัวหน้าห้อง': 0,
-            'ตัวแทนนักเรียน': 0,
-            'ครูที่ปรึกษา': 0,
+            'นักเรียน': 0,
+            'ครู / บุคลากร': 0,
+            'ผู้ปกครอง': 0,
+            'บุคคลภายนอก': 0,
             'อื่นๆ': 0
         };
 
         // สำหรับกราฟเทรนด์ (6 เดือนล่าสุด)
         const monthlyTrend = {};
-        const now = new Date();
         for (let i = 5; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
             const monthKey = d.toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
@@ -330,6 +470,28 @@ async function loadStatistics() {
         snapshot.forEach(doc => {
             const data = doc.data();
             total++;
+
+            // ตรวจสอบเวลาเพื่อจัดกลุ่มสถิติรายเวลา
+            if (data.createdAt) {
+                const createdAt = data.createdAt.toDate();
+                const createdTime = createdAt.getTime();
+
+                if (createdTime >= todayStart) todayCount++;
+                if (createdTime >= sevenDaysAgo) weekCount++;
+                if (createdTime >= thisMonthStart) monthCount++;
+
+                // นับสำหรับปฏิทินรายวัน (ตามเดือน/ปีที่เลือก)
+                if (createdAt.getMonth() === calendarSelectedMonth && createdAt.getFullYear() === calendarSelectedYear) {
+                    const dayNum = createdAt.getDate();
+                    dailyCounts[dayNum] = (dailyCounts[dayNum] || 0) + 1;
+                }
+
+                // นับเทรนด์รายเดือนสำหรับกราฟ
+                const monthKey = createdAt.toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
+                if (monthlyTrend.hasOwnProperty(monthKey)) {
+                    monthlyTrend[monthKey]++;
+                }
+            }
 
             // นับสถานะ
             switch (data.status) {
@@ -363,13 +525,12 @@ async function loadStatistics() {
             if (data.category && categoryCounts.hasOwnProperty(data.category)) {
                 categoryCounts[data.category]++;
             } else if (data.category) {
-                // เช็คกรณี "อื่นๆ (...)"
                 if (data.category.startsWith('อื่นๆ')) {
                     categoryCounts['อื่นๆ']++;
                 }
             }
 
-            // นับประเภทผู้ส่งผลงาน
+            // นับประเภทผู้ร้องเรียน
             if (data.reporterType) {
                 let type = data.reporterType;
                 if (type.startsWith('อื่นๆ')) type = 'อื่นๆ';
@@ -377,15 +538,6 @@ async function loadStatistics() {
                     reporterCounts[type]++;
                 } else {
                     reporterCounts['อื่นๆ']++;
-                }
-            }
-
-            // นับเทรนด์รายเดือน
-            if (data.createdAt) {
-                const date = data.createdAt.toDate();
-                const monthKey = date.toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
-                if (monthlyTrend.hasOwnProperty(monthKey)) {
-                    monthlyTrend[monthKey]++;
                 }
             }
         });
@@ -403,9 +555,60 @@ async function loadStatistics() {
             avgTimeBox.textContent = 'ไม่มีข้อมูล';
         }
 
-        // สร้างการ์ดสถิติ
+        // สร้างการ์ดสถิติ (อัปเกรดใหม่ แบ่งโซน)
         const statsCards = document.getElementById('statsCards');
         statsCards.innerHTML = `
+            <!-- สรุปรายเวลา (Daily/Weekly/Monthly) -->
+            <div class="col-12 mb-3">
+                <div class="d-flex align-items-center mb-3">
+                    <span class="premium-title-vbar me-3" style="height: 20px; background: var(--accent-yellow);"></span>
+                    <h6 class="mb-0 fw-bold">สรุปสถิติรายเวลา (New Reports Summary)</h6>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="card stat-card shadow-sm border-0" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white;">
+                            <div class="card-body p-3 d-flex align-items-center">
+                                <div class="stat-icon-bg me-3"><i class="bi bi-calendar-day"></i></div>
+                                <div>
+                                    <h6 class="text-white-50 mb-0 small">เรื่องใหม่วันนี้</h6>
+                                    <h3 class="fw-bold mb-0">${todayCount} <small class="fs-6 fw-normal">เรื่อง</small></h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card stat-card shadow-sm border-0" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white;">
+                            <div class="card-body p-3 d-flex align-items-center">
+                                <div class="stat-icon-bg me-3"><i class="bi bi-calendar-week"></i></div>
+                                <div>
+                                    <h6 class="text-white-50 mb-0 small">เรื่องใหม่สัปดาห์นี้ (7 วัน)</h6>
+                                    <h3 class="fw-bold mb-0">${weekCount} <small class="fs-6 fw-normal">เรื่อง</small></h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card stat-card shadow-sm border-0" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white;">
+                            <div class="card-body p-3 d-flex align-items-center">
+                                <div class="stat-icon-bg me-3"><i class="bi bi-calendar-month"></i></div>
+                                <div>
+                                    <h6 class="text-white-50 mb-0 small">เรื่องใหม่เดือนนี้</h6>
+                                    <h3 class="fw-bold mb-0">${monthCount} <small class="fs-6 fw-normal">เรื่อง</small></h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- สรุปตามสถานะ -->
+            <div class="col-12 mt-4 mb-2">
+                <div class="d-flex align-items-center mb-3">
+                    <span class="premium-title-vbar me-3" style="height: 20px;"></span>
+                    <h6 class="mb-0 fw-bold">สถานะการดำเนินงานทั้งหมด (Work Status)</h6>
+                </div>
+            </div>
+
             <div class="col-lg-2 col-md-4 col-6 mb-3">
                 <div class="card stat-card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white;">
                     <div class="card-body p-3">
@@ -421,7 +624,7 @@ async function loadStatistics() {
                 <div class="card stat-card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); color: white;">
                     <div class="card-body p-3">
                         <div class="text-center">
-                            <h6 class="text-white-50 mb-1 small">รอตรวจ</h6>
+                            <h6 class="text-white-50 mb-1 small">รอรับเรื่อง</h6>
                             <h3 class="fw-bold mb-0">${waiting}</h3>
                         </div>
                     </div>
@@ -432,7 +635,7 @@ async function loadStatistics() {
                 <div class="card stat-card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: white;">
                     <div class="card-body p-3">
                         <div class="text-center">
-                            <h6 class="text-white-50 mb-1 small">รับข้อมูลแล้ว</h6>
+                            <h6 class="text-white-50 mb-1 small">รับเรื่องแล้ว</h6>
                             <h3 class="fw-bold mb-0">${accepted}</h3>
                         </div>
                     </div>
@@ -440,10 +643,10 @@ async function loadStatistics() {
             </div>
 
             <div class="col-lg-2 col-md-4 col-6 mb-3">
-                <div class="card stat-card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white;">
+                <div class="card stat-card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%); color: white;">
                     <div class="card-body p-3">
                         <div class="text-center">
-                            <h6 class="text-white-50 mb-1 small">กำลังประเมิน</h6>
+                            <h6 class="text-white-50 mb-1 small">ดำเนินการ</h6>
                             <h3 class="fw-bold mb-0">${inProgress}</h3>
                         </div>
                     </div>
@@ -454,7 +657,7 @@ async function loadStatistics() {
                 <div class="card stat-card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white;">
                     <div class="card-body p-3">
                         <div class="text-center">
-                            <h6 class="text-white-50 mb-1 small">ประเมินแล้ว</h6>
+                            <h6 class="text-white-50 mb-1 small">เสร็จสิ้น</h6>
                             <h3 class="fw-bold mb-0">${resolved}</h3>
                         </div>
                     </div>
@@ -465,7 +668,7 @@ async function loadStatistics() {
                 <div class="card stat-card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); color: white;">
                     <div class="card-body p-3">
                         <div class="text-center">
-                            <h6 class="text-white-50 mb-1 small">ไม่ผ่าน/ไม่ชัดเจน</h6>
+                            <h6 class="text-white-50 mb-1 small">ไม่รับเรื่อง</h6>
                             <h3 class="fw-bold mb-0">${rejected}</h3>
                         </div>
                     </div>
@@ -480,6 +683,9 @@ async function loadStatistics() {
             monthlyTrend,
             reporterCounts
         );
+
+        // แสดงปฏิทินสรุปรายวัน
+        renderComplaintCalendar(dailyCounts);
 
     } catch (error) {
         console.error("Error loading statistics:", error);
@@ -501,15 +707,23 @@ function loadComplaintsTable() {
             const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
             const categoryFilter = document.getElementById('categoryFilter')?.value || '';
             const statusFilter = document.getElementById('statusFilter')?.value || '';
+            const timeFilter = document.getElementById('timeFilter')?.value || '';
 
             tableBody.innerHTML = '';
 
             let filteredDocs = [];
+
+            // เตรียมตัวแปรสำหรับเช็คเวลา
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+            const yearStart = new Date(now.getFullYear(), 0, 1).getTime();
+
             snapshot.forEach(doc => {
                 const data = doc.data();
                 const id = doc.id;
 
-                // ค้นหาและฟิลเตอร์
+                // ค้นหาและฟิลเตอร์พื้นฐาน
                 const matchesSearch = !searchTerm ||
                     (data.ticketId && data.ticketId.toLowerCase().includes(searchTerm)) ||
                     (data.title && data.title.toLowerCase().includes(searchTerm));
@@ -521,7 +735,16 @@ function loadComplaintsTable() {
                     (data.status === statusFilter) ||
                     (statusFilter === 'waiting' && data.status === 'pending');
 
-                if (matchesSearch && matchesCategory && matchesStatus) {
+                // ฟิลเตอร์ช่วงเวลา
+                let matchesTime = true;
+                if (timeFilter && data.createdAt) {
+                    const createdTime = data.createdAt.toDate().getTime();
+                    if (timeFilter === 'daily') matchesTime = createdTime >= todayStart;
+                    else if (timeFilter === 'monthly') matchesTime = createdTime >= monthStart;
+                    else if (timeFilter === 'yearly') matchesTime = createdTime >= yearStart;
+                }
+
+                if (matchesSearch && matchesCategory && matchesStatus && matchesTime) {
                     filteredDocs.push({ id, ...data });
                 }
             });
@@ -529,32 +752,13 @@ function loadComplaintsTable() {
             if (filteredDocs.length === 0) {
                 tableBody.innerHTML = `
                     <tr>
-                        <td colspan="6" class="text-center text-muted py-5">
-                            <i class="bi bi-inbox fs-1 d-block mb-3 opacity-25"></i>
-                            <div>ไม่พบข้อมูลผลงานในขณะนี้</div>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox me-2"></i>ไม่พบข้อมูลที่ตรงตามเงื่อนไข
                         </td>
                     </tr>
                 `;
                 return;
             }
-
-            // เรียงลำดับตามห้อง (ระดับชั้น -> เลขห้อง -> วันที่)
-            filteredDocs.sort((a, b) => {
-                // 1. เรียงตามระดับชั้น (Category)
-                if (a.category !== b.category) {
-                    return a.category.localeCompare(b.category, 'th');
-                }
-                // 2. เรียงตามเลขห้อง (Room Number) - แปลงเป็นตัวเลขถ้าทำได้
-                const roomA = parseInt(a.roomNumber) || 0;
-                const roomB = parseInt(b.roomNumber) || 0;
-                if (roomA !== roomB) {
-                    return roomA - roomB;
-                }
-                // 3. เรียงตามวันที่ (Date) - ใหม่สุดขึ้นก่อน
-                const dateA = a.createdAt ? a.createdAt.toDate() : new Date(0);
-                const dateB = b.createdAt ? b.createdAt.toDate() : new Date(0);
-                return dateB - dateA;
-            });
 
             filteredDocs.forEach(data => {
                 const id = data.id;
@@ -562,39 +766,58 @@ function loadComplaintsTable() {
 
                 // แปลงวันที่
                 let dateStr = '-';
-                if (data.updatedAt) {
-                    const date = data.updatedAt.toDate();
-                    dateStr = date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' น.';
-                } else if (data.createdAt) {
+                if (data.createdAt) {
                     const date = data.createdAt.toDate();
-                    dateStr = date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' น.';
+                    dateStr = date.toLocaleDateString('th-TH');
                 }
 
                 // สร้างแถวตาราง
                 const row = document.createElement('tr');
+                // เพิ่มสีพื้นหลังเบาๆ ถ้าเป็นเรื่องซ้ำ
                 if (data.isDuplicate) {
                     row.style.backgroundColor = 'rgba(239, 68, 68, 0.05)';
                 }
 
                 row.innerHTML = `
-                    <td class="ps-4" data-label="ระดับชั้น/ห้อง">
-                        <div class="fw-bold text-dark">${data.category || '-'}</div>
-                        <span class="badge bg-secondary-subtle text-secondary px-3 py-1 rounded-pill mt-1">
-                            ห้อง ${data.roomNumber || '-'}
+                    <td class="ps-4" data-label="Ticket ID">
+                        <span class="badge bg-light text-dark border p-2 rounded-3">${data.ticketId || '-'}</span>
+                        ${data.isDuplicate ? '<div class="mt-1"><span class="badge bg-danger-subtle text-danger" style="font-size: 0.7rem;"><i class="bi bi-intersect me-1"></i>เรื่องซ้ำ</span></div>' : ''}
+                    </td>
+                    <td data-label="หัวข้อ">
+                        <div class="fw-bold text-dark table-truncate-title" title="${data.title || '-'}">${data.title || '-'}</div>
+                    </td>
+                    <td data-label="ประเภท">
+                        <span class="badge bg-secondary-subtle text-secondary px-3 py-2 rounded-pill table-truncate-category" title="${data.category || '-'}">
+                            ${data.category || '-'}
                         </span>
-                        ${data.isDuplicate ? '<div class="mt-1"><span class="badge bg-danger-subtle text-danger" style="font-size: 0.7rem;"><i class="bi bi-intersect me-1"></i>ข้อมูลซ้ำ</span></div>' : ''}
                     </td>
-                    <td class="small text-muted" data-label="วันที่ส่ง">${dateStr}</td>
-                    <td data-label="คะแนน">
-                        <div class="fw-bold text-success fs-5">${data.score || '-'}</div>
+                    <td data-label="สถานที่">
+                        <div class="small fw-bold text-dark table-truncate-location" title="${data.location || '-'}">${data.location || '-'}</div>
                     </td>
+                    <td data-label="วันที่พบปัญหา" class="small">
+                        ${data.incidentDate ? new Date(data.incidentDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '-'}
+                    </td>
+                    <td data-label="ผู้ร้องเรียน">
+                        <div class="d-flex align-items-center justify-content-end justify-content-md-start">
+                            <div class="bg-light rounded-circle p-2 me-2 d-none d-md-block">
+                                <i class="bi bi-person text-success"></i>
+                            </div>
+                            <div class="text-end text-md-start">
+                                <div class="fw-bold small">${data.reporterName || '-'}</div>
+                                <div class="mb-1"><span class="badge bg-info-subtle text-info fw-normal" style="font-size: 0.7rem;">${data.reporterType || '-'}</span></div>
+                                <div class="text-muted" style="font-size: 0.75rem;">${data.reporterEmail || '-'}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="small text-muted" data-label="วันที่แจ้ง">${dateStr}</td>
                     <td data-label="สถานะ">
                         <span class="status-badge status-${data.status || 'pending'}">
-                            <i class="bi bi-dot fs-4"></i>${data.status === 'resolved' ? dateStr : getStatusText(data.status)}
+                            <i class="bi bi-dot fs-4"></i>${getStatusText(data.status)}
                         </span>
                     </td>
                     <td class="pe-4 text-center" data-label="จัดการ">
                         <div class="action-wrapper d-flex flex-column flex-md-row align-items-center justify-content-center gap-2">
+                            <!-- Action Group for View/Delete -->
                             <div class="action-btn-group p-1 bg-white rounded-pill shadow-sm border d-flex gap-1" style="min-width: fit-content;">
                                 <button class="btn btn-action-view btn-sm rounded-circle border-0 view-details-btn" 
                                         data-id="${id}"
@@ -607,15 +830,21 @@ function loadComplaintsTable() {
                                     <i class="bi bi-trash-fill"></i>
                                 </button>
                             </div>
+
+                            <!-- Status Selector (Modernized) -->
                             <div class="status-selector-container">
                                 <select class="form-select form-select-sm status-select-modern border shadow-sm rounded-pill" 
                                         data-id="${id}" 
                                         ${isLocked ? 'disabled' : ''}>
-                                    <option value="waiting" ${data.status === 'waiting' || data.status === 'pending' ? 'selected' : ''}>รอตรวจ</option>
-                                    <option value="accepted" ${data.status === 'accepted' ? 'selected' : ''}>รับข้อมูลแล้ว</option>
-                                    <option value="in-progress" ${data.status === 'in-progress' ? 'selected' : ''}>กำลังประเมิน</option>
-                                    <option value="resolved" ${data.status === 'resolved' ? 'selected' : ''}>ประเมินแล้ว</option>
-                                    <option value="rejected" ${data.status === 'rejected' ? 'selected' : ''}>ไม่ผ่าน/ไม่ชัดเจน</option>
+                                    <option value="waiting" ${data.status === 'waiting' || data.status === 'pending' ? 'selected' : ''} 
+                                        ${(data.status !== 'waiting' && data.status !== 'pending') ? 'disabled' : ''}>รอรับเรื่อง</option>
+                                    <option value="accepted" ${data.status === 'accepted' ? 'selected' : ''}
+                                        ${(data.status === 'in-progress' || data.status === 'resolved' || data.status === 'rejected') ? 'disabled' : ''}>รับเรื่องแล้ว</option>
+                                    <option value="in-progress" ${data.status === 'in-progress' ? 'selected' : ''}
+                                        ${(data.status === 'resolved' || data.status === 'rejected') ? 'disabled' : ''}>ดำเนินการ</option>
+                                    <option value="resolved" ${data.status === 'resolved' ? 'selected' : ''}>เสร็จสิ้น</option>
+                                    <option value="rejected" ${data.status === 'rejected' ? 'selected' : ''}
+                                        ${(data.status === 'in-progress' || data.status === 'resolved') ? 'disabled' : ''}>ไม่รับเรื่อง</option>
                                 </select>
                             </div>
                         </div>
@@ -632,18 +861,6 @@ function loadComplaintsTable() {
             loadStatistics();
         }, error => {
             console.error("Error loading complaints:", error);
-            const tableBody = document.getElementById('complaintsTableBody');
-            if (tableBody) {
-                tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="8" class="text-center text-danger py-5">
-                            <i class="bi bi-exclamation-triangle fs-1 d-block mb-3"></i>
-                            <div>เกิดข้อผิดพลาดในการโหลดข้อมูล: ${error.message}</div>
-                            <small class="text-muted">โปรดตรวจสอบการตั้งค่า Firestore Rules ของท่าน</small>
-                        </td>
-                    </tr>
-                `;
-            }
         });
 }
 
@@ -669,8 +886,20 @@ function addTableEventListeners() {
 }
 
 // ===== ฟังก์ชันดูรายละเอียด =====
-async function handleViewDetails(e) {
-    const complaintId = e.target.closest('button').dataset.id;
+// ===== ฟังก์ชันดูรายละเอียด =====
+async function handleViewDetails(complaintIdOrEvent) {
+    let complaintId;
+
+    // รองรับทั้งการเรียกจาก Event และเรียกด้วย ID โดยตรง
+    if (typeof complaintIdOrEvent === 'string') {
+        complaintId = complaintIdOrEvent;
+    } else {
+        const btn = complaintIdOrEvent.target.closest('button');
+        if (!btn) return;
+        complaintId = btn.dataset.id;
+    }
+
+    if (!complaintId) return;
 
     try {
         const doc = await complaintsCollection.doc(complaintId).get();
@@ -683,14 +912,10 @@ async function handleViewDetails(e) {
             <div class="text-start admin-detail-modal">
                 <div class="header-banner mb-4 p-3 rounded-4 d-flex align-items-center justify-content-between" style="background: var(--gradient-primary); color: white;">
                     <div>
-                        <small class="text-white-50 d-block">Submission ID</small>
+                        <small class="text-white-50 d-block">Ticket ID</small>
                         <h4 class="mb-0 fw-bold">#${data.ticketId}</h4>
                     </div>
                     <div class="text-end">
-                        <div class="bg-white text-success p-2 rounded-3 shadow-sm mb-2 text-center" style="min-width: 80px;">
-                            <small class="text-muted d-block fw-bold" style="font-size: 0.6rem;">คะแนน</small>
-                            <span class="fs-4 fw-bold">${data.score || '-'}</span>
-                        </div>
                         <span class="status-badge status-${data.status || 'pending'} shadow-sm">
                             ${getStatusText(data.status)}
                         </span>
@@ -701,27 +926,52 @@ async function handleViewDetails(e) {
                     <!-- ส่วนข้อมูลเนื้อหา -->
                     <div class="col-md-7">
                         <div class="detail-section mb-4">
-                            <h6 class="text-muted small text-uppercase fw-bold mb-2"><i class="bi bi-house-door me-2 text-success"></i>ระดับชั้น / ห้อง</h6>
-                            <p class="fs-4 fw-bold text-dark border-bottom pb-2">${data.category} ห้อง ${data.roomNumber}</p>
+                            <h6 class="text-muted small text-uppercase fw-bold mb-2"><i class="bi bi-chat-left-text me-2 text-success"></i>หัวข้อเรื่อง</h6>
+                            <p class="fs-5 fw-bold text-dark border-bottom pb-2">${data.title}</p>
                         </div>
 
+                        <div class="row mb-4">
+                            <div class="col-6">
+                                <h6 class="text-muted small text-uppercase fw-bold mb-2"><i class="bi bi-tag me-2 text-success"></i>หมวดหมู่</h6>
+                                <p class="badge bg-light text-dark border px-3 py-2 rounded-pill mb-0">${data.category}</p>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="text-muted small text-uppercase fw-bold mb-2"><i class="bi bi-geo-alt me-2 text-success"></i>สถานที่</h6>
+                                <p class="badge bg-warning-subtle text-dark border border-warning-subtle px-3 py-2 rounded-pill mb-0">${data.location || '-'}</p>
+                            </div>
+                        </div>
 
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6 class="text-muted small text-uppercase fw-bold mb-2"><i class="bi bi-calendar-event me-2 text-success"></i>วันที่พบปัญหา</h6>
+                                <p class="mb-0 text-dark fw-bold">${data.incidentDate ? new Date(data.incidentDate).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'}</p>
+                            </div>
+                        </div>
 
                         <div class="detail-section mb-4">
-                            <h6 class="text-muted small text-uppercase fw-bold mb-2"><i class="bi bi-justify-left me-2 text-success"></i>รายละเอียด / ข้อเสนอแนะ</h6>
+                            <h6 class="text-muted small text-uppercase fw-bold mb-2"><i class="bi bi-justify-left me-2 text-success"></i>รายละเอียดเพิ่มเติม</h6>
                             <div class="p-3 bg-light rounded-4 border-start border-4 border-success-subtle" style="white-space: pre-wrap; font-size: 0.95rem; min-height: 100px;">${data.details}</div>
                         </div>
 
                         <div class="detail-section mb-0 p-3 rounded-4 bg-info-subtle bg-opacity-10 border border-info-subtle">
-                            <h6 class="text-info fw-bold mb-2 small text-uppercase"><i class="bi bi-envelope me-2"></i>อีเมลสำหรับติดต่อ</h6>
-                            <div class="fw-bold text-dark">${data.reporterEmail}</div>
+                            <h6 class="text-info fw-bold mb-2 small text-uppercase"><i class="bi bi-person-circle me-2"></i>ข้อมูลผู้แจ้ง</h6>
+                            <div class="d-flex align-items-center">
+                                <div class="bg-white rounded-circle p-2 me-3 border">
+                                    <i class="bi bi-person-vcard text-info fs-4"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold text-dark">${data.reporterName}</div>
+                                    <div class="small text-muted">${data.reporterEmail}</div>
+                                    <div class="badge bg-info text-white mt-1 fw-normal">${data.reporterType || 'นักเรียน'}</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <!-- ส่วนข้อมูลรูปภาพและการตอบกลับ -->
                     <div class="col-md-5">
                         <div class="detail-section mb-4">
-                            <h6 class="text-muted small text-uppercase fw-bold mb-3 text-center text-md-start"><i class="bi bi-images me-2 text-success"></i>ภาพห้องเรียน</h6>
+                            <h6 class="text-muted small text-uppercase fw-bold mb-3 text-center text-md-start"><i class="bi bi-images me-2 text-success"></i>ภาพหลักฐาน</h6>
                             <div class="image-grid d-flex flex-wrap gap-2 justify-content-center justify-content-md-start">
                             ${data.imageUrls && data.imageUrls.length > 0 ?
                 data.imageUrls.map(url => `
@@ -745,7 +995,7 @@ async function handleViewDetails(e) {
 
 
                         <div class="detail-section mb-4">
-                            <h6 class="text-muted small text-uppercase fw-bold mb-3"><i class="bi bi-clock-history me-2 text-success"></i>ประวัติการดำเนินการ (Timeline)</h6>
+                            <h6 class="text-muted small text-uppercase fw-bold mb-3"><i class="bi bi-clock-history me-2 text-success"></i>ประวัติการแก้ไข (Timeline)</h6>
                             <div class="timeline-v3 small" style="max-height: 250px; overflow-y: auto;">
                                 ${data.activities ? [...data.activities].reverse().map(act => `
                                     <div class="timeline-item-v3" data-status="${act.status || 'pending'}">
@@ -764,7 +1014,7 @@ async function handleViewDetails(e) {
                         <div class="admin-feedback-section mt-auto">
                             <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
                                 <div class="card-header bg-success text-white py-2 small fw-bold">
-                                    <i class="bi bi-shield-check me-2"></i>ผลการประเมินจากผู้ดูแล
+                                    <i class="bi bi-shield-check me-2"></i>ผลดำเนินการจากผู้ดูแล
                                 </div>
                                 <div class="card-body p-3 bg-success bg-opacity-10">
                                     ${data.adminFeedback ? `
@@ -813,8 +1063,6 @@ async function handleStatusChange(e) {
     const newStatus = e.target.value;
     let feedback = "";
     let adminImageUrl = "";
-    let adminScore = undefined;
-    let detailedScores = null;
 
     // ข้อมูลเดิม
     const doc = await complaintsCollection.doc(complaintId).get();
@@ -826,125 +1074,17 @@ async function handleStatusChange(e) {
 
         const { value: result } = await Swal.fire({
             title: `อัพเดตข้อมูลสถานะ: ${getStatusText(newStatus)}`,
-            width: '600px',
-            html: `
-                <div class="text-start">
-                    ${newStatus === 'resolved' ? `
-                    <div class="premium-score-system p-4 rounded-4 bg-white shadow-sm border mb-4">
-                        <div class="d-flex align-items-center justify-content-between mb-4 border-bottom pb-3">
-                            <h5 class="fw-bold mb-0 text-success"><i class="bi bi-shield-check me-2"></i>เกณฑ์การประเมินห้องเรียน</h5>
-                            <div class="badge bg-success-subtle text-success fs-6 px-3 py-2 rounded-pill">คะแนนเต็ม 15</div>
-                        </div>
-                        
-                        <div class="row g-4">
-                            <!-- Group 1: 2 Points Criteria -->
-                            <div class="col-12"><small class="text-muted fw-bold text-uppercase" style="letter-spacing: 1px;">รายการละ 2 คะแนน</small></div>
-                            
-                            <div class="col-md-4">
-                                <div class="score-card-v2 p-3 rounded-4 border text-center transition-all h-100">
-                                    <i class="bi bi-house-door fs-3 mb-2 d-block text-success"></i>
-                                    <label class="small fw-bold d-block mb-2">สภาพห้องเรียน</label>
-                                    <input type="number" id="sc1" class="form-control form-control-lg score-field text-center fw-bold border-0 bg-light rounded-3" min="0" max="2" value="${data.detailedScores?.sc1 || 0}">
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="score-card-v2 p-3 rounded-4 border text-center transition-all h-100">
-                                    <i class="bi bi-layers fs-3 mb-2 d-block text-success"></i>
-                                    <label class="small fw-bold d-block mb-2">พื้นห้องเรียน</label>
-                                    <input type="number" id="sc2" class="form-control form-control-lg score-field text-center fw-bold border-0 bg-light rounded-3" min="0" max="2" value="${data.detailedScores?.sc2 || 0}">
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="score-card-v2 p-3 rounded-4 border text-center transition-all h-100">
-                                    <i class="bi bi-display fs-3 mb-2 d-block text-success"></i>
-                                    <label class="small fw-bold d-block mb-2">โต๊ะนักเรียน</label>
-                                    <input type="number" id="sc3" class="form-control form-control-lg score-field text-center fw-bold border-0 bg-light rounded-3" min="0" max="2" value="${data.detailedScores?.sc3 || 0}">
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="score-card-v2 p-3 rounded-4 border text-center transition-all h-100">
-                                    <i class="bi bi-person-workspace fs-3 mb-2 d-block text-success"></i>
-                                    <label class="small fw-bold d-block mb-2">โต๊ะครู</label>
-                                    <input type="number" id="sc4" class="form-control form-control-lg score-field text-center fw-bold border-0 bg-light rounded-3" min="0" max="2" value="${data.detailedScores?.sc4 || 0}">
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="score-card-v2 p-3 rounded-4 border text-center transition-all h-100">
-                                    <i class="bi bi-lightning-charge fs-3 mb-2 d-block text-success"></i>
-                                    <label class="small fw-bold d-block mb-2">เครื่องใช้ไฟฟ้า</label>
-                                    <input type="number" id="sc5" class="form-control form-control-lg score-field text-center fw-bold border-0 bg-light rounded-3" min="0" max="2" value="${data.detailedScores?.sc5 || 0}">
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="score-card-v2 p-3 rounded-4 border text-center transition-all h-100">
-                                    <i class="bi bi-door-closed fs-3 mb-2 d-block text-success"></i>
-                                    <label class="small fw-bold d-block mb-2">ประตูห้อง</label>
-                                    <input type="number" id="sc6" class="form-control form-control-lg score-field text-center fw-bold border-0 bg-light rounded-3" min="0" max="2" value="${data.detailedScores?.sc6 || 0}">
-                                </div>
-                            </div>
-
-                            <!-- Group 2: 1 Point Criteria -->
-                            <div class="col-12 mt-2"><small class="text-muted fw-bold text-uppercase" style="letter-spacing: 1px;">รายการละ 1 คะแนน</small></div>
-                            
-                            <div class="col-md-4">
-                                <div class="score-card-v2 p-3 rounded-4 border text-center transition-all h-100">
-                                    <i class="bi bi-trash fs-3 mb-2 d-block text-success"></i>
-                                    <label class="small fw-bold d-block mb-2">ถังขยะ</label>
-                                    <input type="number" id="sc7" class="form-control form-control-lg score-field text-center fw-bold border-0 bg-light rounded-3" min="0" max="1" value="${data.detailedScores?.sc7 || 0}">
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="score-card-v2 p-3 rounded-4 border text-center transition-all h-100">
-                                    <i class="bi bi-border-style fs-3 mb-2 d-block text-success"></i>
-                                    <label class="small fw-bold d-block mb-2">กระดานหน้าห้อง</label>
-                                    <input type="number" id="sc8" class="form-control form-control-lg score-field text-center fw-bold border-0 bg-light rounded-3" min="0" max="1" value="${data.detailedScores?.sc8 || 0}">
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="score-card-v2 p-3 rounded-4 border text-center transition-all h-100">
-                                    <i class="bi bi-grid-3x3 fs-3 mb-2 d-block text-success"></i>
-                                    <label class="small fw-bold d-block mb-2">หน้าต่าง</label>
-                                    <input type="number" id="sc9" class="form-control form-control-lg score-field text-center fw-bold border-0 bg-light rounded-3" min="0" max="1" value="${data.detailedScores?.sc9 || 0}">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mt-4 p-3 rounded-4 bg-success bg-opacity-10 d-flex justify-content-between align-items-center">
-                            <span class="fw-bold text-dark fs-5">คะแนนสรุปห้องเรียน:</span>
-                            <div class="d-flex align-items-baseline">
-                                <span id="total-score-preview" class="display-5 fw-bold text-success me-2">${data.score || 0}</span>
-                                <span class="text-muted fs-4">/ 15</span>
-                            </div>
-                        </div>
-                    </div>
-                    ` : ''}
-
-                    <label class="form-label small fw-bold text-secondary text-uppercase mb-2" style="letter-spacing: 1px;">
-                        <i class="bi bi-chat-dots me-1"></i> คอมเมนต์ / ข้อผิดพลาดที่พบ
-                    </label>
-                    <textarea id="swal-feedback" class="form-control mb-4 p-3" style="border-radius: 15px; font-size: 0.95rem; border: 1px solid #e0e0e0; min-height: 100px;" placeholder="ระบุสิ่งที่ต้องการให้แก้ไข หรือชมเชย...">${data.adminFeedback || ''}</textarea>
+            html:
+                `<div class="text-start">
+                    <label class="form-label small fw-bold text-dark">${isRejected ? 'ระบุเหตุผลที่ไม่รับเรื่อง' : 'เหตุผลหรือรายละเอียดเพิ่มเติม (ถ้ามี)'}</label>
+                    <textarea id="swal-feedback" class="form-control mb-3" style="border-radius: 12px; font-size: 0.9rem;" placeholder="กรอกรายละเอียด...">${data.adminFeedback || ''}</textarea>
                     
-                    <label class="form-label small fw-bold text-secondary text-uppercase mb-2" style="letter-spacing: 1px;">
-                        <i class="bi bi-camera-fill me-1"></i> ภาพถ่ายการประเมิน
-                    </label>
+                    <label class="form-label small fw-bold text-dark">อัปโหลดรูปภาพหลักฐาน (ถ้ามี)</label>
                     <div class="input-group">
-                        <input type="file" id="swal-imagefile" class="form-control p-2" style="border-radius: 12px;" accept="image/*">
+                        <input type="file" id="swal-imagefile" class="form-control" style="border-radius: 12px;" accept="image/*">
                     </div>
                     <div id="upload-status" class="small text-muted mt-2"></div>
                 </div>`,
-            didOpen: () => {
-                const scoreFields = document.querySelectorAll('.score-field');
-                const totalPreview = document.getElementById('total-score-preview');
-
-                if (scoreFields && totalPreview) {
-                    const calculateTotal = () => {
-                        let total = 0;
-                        scoreFields.forEach(f => total += (parseFloat(f.value) || 0));
-                        totalPreview.textContent = total;
-                    };
-                    scoreFields.forEach(f => f.addEventListener('input', calculateTotal));
-                }
-            },
             focusConfirm: false,
             showCancelButton: true,
             confirmButtonText: 'บันทึกข้อมูล',
@@ -972,38 +1112,6 @@ async function handleStatusChange(e) {
                     }
                 }
 
-                if (newStatus === 'resolved') {
-                    const fields = ['sc1', 'sc2', 'sc3', 'sc4', 'sc5', 'sc6', 'sc7', 'sc8', 'sc9'];
-                    const detailedScores = {};
-                    let total = 0;
-
-                    fields.forEach(f => {
-                        const input = document.getElementById(f);
-                        const numVal = parseFloat(input.value) || 0;
-                        detailedScores[f] = numVal;
-                        total += numVal;
-                    });
-
-                    // บังคับให้กรอกคะแนน - ถ้าคะแนนรวมเป็น 0 แสดงว่ายังไม่ได้ประเมิน
-                    if (total === 0) {
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'กรุณากรอกคะแนนประเมิน',
-                            text: 'คะแนนรวมต้องมากกว่า 0 จึงจะสามารถบันทึกได้',
-                            confirmButtonColor: '#f59e0b',
-                            confirmButtonText: 'ตกลง'
-                        });
-                        return false;
-                    }
-
-                    return {
-                        feedback: feedbackValue,
-                        imageUrl: uploadedUrl,
-                        score: total,
-                        detailedScores: detailedScores
-                    }
-                }
-
                 return {
                     feedback: feedbackValue,
                     imageUrl: uploadedUrl
@@ -1018,8 +1126,6 @@ async function handleStatusChange(e) {
         }
         feedback = result.feedback;
         adminImageUrl = result.imageUrl;
-        adminScore = result.score;
-        detailedScores = result.detailedScores;
     }
 
     try {
@@ -1030,8 +1136,6 @@ async function handleStatusChange(e) {
 
         if (feedback) updateData.adminFeedback = feedback;
         if (adminImageUrl) updateData.adminImageUrl = adminImageUrl;
-        if (adminScore !== undefined) updateData.score = adminScore;
-        if (detailedScores) updateData.detailedScores = detailedScores;
 
         // บันทึก Timeline
         const activity = {
@@ -1047,11 +1151,11 @@ async function handleStatusChange(e) {
         });
 
         // แสดงแจ้งเตือน
-        showAdminAlert(`อัพเดตสถานะและคะแนนประเมินสำเร็จ`, 'success');
+        showAdminAlert(`อัพเดตสถานะเป็น "${getStatusText(newStatus)}" สำเร็จ`, 'success');
 
     } catch (error) {
         console.error("Error updating status:", error);
-        showAdminAlert(`อัพเดตสถานะไม่สำเร็จ: ${error.message}`, 'danger');
+        showAdminAlert("อัพเดตสถานะไม่สำเร็จ กรุณาติดต่อแอดมิน", 'danger');
         loadComplaintsTable();
     }
 }
@@ -1102,7 +1206,7 @@ async function exportToCSV() {
 
         const snapshot = await complaintsCollection.get();
         let csvContent = "\uFEFF"; // Unicode Character 'ZERO WIDTH NO-BREAK SPACE' for Excel UTF-8
-        csvContent += "Submission ID,วันที่ส่ง,ระดับชั้น,ห้อง,คะแนน,สถานะ,อีเมลติดต่อ,รายละเอียด\n";
+        csvContent += "Ticket ID,วันที่แจ้ง,หัวข้อเรื่อง,หมวดหมู่,สถานที่,สถานะ,ผู้ร้องเรียน,ประเภทผู้แจ้ง,รายละเอียด\n";
 
         snapshot.forEach(doc => {
             const d = doc.data();
@@ -1110,11 +1214,12 @@ async function exportToCSV() {
             const row = [
                 d.ticketId || '',
                 date,
+                `"${(d.title || '').replace(/"/g, '""')}"`,
                 d.category || '',
-                d.roomNumber || '',
-                d.score !== undefined ? `${d.score}/15` : '-',
+                d.location || '',
                 getStatusText(d.status),
-                d.reporterEmail || '',
+                d.reporterName || '',
+                d.reporterType || '',
                 `"${(d.details || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`
             ];
             csvContent += row.join(",") + "\n";
@@ -1297,7 +1402,7 @@ function renderCharts(statusData, categoryData, trendData, reporterData) {
         }
     });
 
-    // 4. กราฟประเภทผู้ส่งผลงาน (Doughnut Chart)
+    // 4. กราฟประเภทผู้ร้องเรียน (Doughnut Chart)
     const reporterCtx = document.getElementById('reporterChart').getContext('2d');
     if (reporterChart) reporterChart.destroy();
     reporterChart = new Chart(reporterCtx, {
@@ -1324,12 +1429,12 @@ function renderCharts(statusData, categoryData, trendData, reporterData) {
 // ===== ฟังก์ชันช่วยเหลือ =====
 function getStatusText(status) {
     const statusMap = {
-        'waiting': 'รอตรวจ',
-        'pending': 'รอตรวจ',
-        'accepted': 'รับข้อมูลแล้ว',
-        'in-progress': 'กำลังประเมิน',
-        'resolved': 'ประเมินแล้ว',
-        'rejected': 'ไม่ผ่าน/ข้อมูลไม่ชัดเจน'
+        'waiting': 'รอรับเรื่อง',
+        'pending': 'รอรับเรื่อง',
+        'accepted': 'รับเรื่องแล้ว',
+        'in-progress': 'ดำเนินการ',
+        'resolved': 'เสร็จสิ้น',
+        'rejected': 'ไม่รับเรื่อง'
     };
     return statusMap[status] || status;
 }
@@ -1371,7 +1476,7 @@ async function exportToPDF() {
 
         const snapshot = await complaintsCollection.orderBy('createdAt', 'desc').get();
         if (snapshot.empty) {
-            Swal.fire('ไม่พบข้อมูล', 'ไม่มีรายการส่งผลงานที่ต้องการส่งออก', 'info');
+            Swal.fire('ไม่พบข้อมูล', 'ไม่มีรายการร้องเรียนที่ต้องการส่งออก', 'info');
             return;
         }
 
@@ -1386,8 +1491,8 @@ async function exportToPDF() {
                     <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${date}</td>
                     <td style="border: 1px solid #ddd; padding: 8px;">${d.title || '-'}</td>
                     <td style="border: 1px solid #ddd; padding: 8px;">${d.category || '-'}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px; text-align: center; font-weight: bold; color: #1b5e20;">${d.score !== undefined ? d.score : '-'}</td>
                     <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${getStatusText(d.status)}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;">${d.reporterName || '-'}</td>
                 </tr>
             `;
         });
@@ -1411,22 +1516,21 @@ async function exportToPDF() {
             <body>
                 <div class="header">
                     <img src="logo.png" class="logo">
-                    <h2 style="margin:0;">รายงานสรุปผลการประกวดห้องเรียนสะอาด</h2>
-                    <p style="margin:5px 0 0 0;">สภานักเรียนโรงเรียนสุรวิทยาคาร</p>
+                    <h2 style="margin:0;">รายงานสรุปผลการดำเนินงานระบบร้องเรียนออนไลน์</h2>
+                    <h3 style="margin:5px 0; color:#666;">สภานักเรียนโรงเรียนสุรวิทยาคาร</h3>
+                    <p style="font-size:12px;">พิมพ์เมื่อ: ${new Date().toLocaleString('th-TH')}</p>
                 </div>
-                <div style="margin-bottom:30px;">
-                    <h1 style="color:#1b5e20; border-bottom:2px solid #1b5e20; padding-bottom:10px;">ภาพรวมการประเมินผล</h1>
-                </div>
-                <h4 style="border-left:5px solid #1b5e20; padding-left:10px;">รายการส่งผลงานทั้งหมด (${snapshot.size} รายการ)</h4>
+                
+                <h4 style="border-left:5px solid #1b5e20; padding-left:10px;">รายการร้องเรียนทั้งหมด (${snapshot.size} รายการ)</h4>
                 <table>
                     <thead>
                         <tr>
-                            <th>Submission ID</th>
-                            <th>วันที่ส่ง</th>
-                            <th>ห้องเรียน</th>
-                            <th>ระดับชั้น</th>
-                            <th>คะแนน</th>
+                            <th>Ticket ID</th>
+                            <th>วันที่</th>
+                            <th>หัวข้อเรื่อง</th>
+                            <th>หมวดหมู่</th>
                             <th>สถานะ</th>
+                            <th>ผู้แจ้ง</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1492,272 +1596,678 @@ async function exportToPDF() {
     }
 }
 
-// ===== ฟังก์ชันสรุปคะแนนประเมินรายสัปดาห์/เดือน/ปี =====
-async function generateSummary(period) {
-    const summaryTableBody = document.getElementById('summaryTableBody');
-    const dateRangeDisplay = document.getElementById('dateRangeDisplay');
-    const buttons = document.querySelectorAll('.btn-summary-filter');
+// ===== ฟังก์ชันจัดการผู้ใช้งาน (User Management) =====
 
-    // อัปเดตสถานะปุ่ม
-    buttons.forEach(btn => {
-        btn.classList.remove('active', 'btn-success', 'text-white');
-        btn.classList.add('btn-light');
-        if ((period === 'daily' && btn.id === 'btnDaily') ||
-            (period === 'weekly' && btn.id === 'btnWeekly') ||
-            (period === 'monthly' && btn.id === 'btnMonthly') ||
-            (period === 'yearly' && btn.id === 'btnYearly')) {
-            btn.classList.remove('btn-light');
-            btn.classList.add('active', 'btn-success', 'text-white');
-        }
-    });
-
-    if (summaryTableBody) {
-        summaryTableBody.innerHTML = `
-            <tr>
-                <td colspan="6" class="text-center py-5 text-muted">
-                    <div class="spinner-border spinner-border-sm text-success me-2"></div>
-                    กำลังคำนวณอันดับคะแนน...
-                </td>
-            </tr>
-        `;
-    }
+async function loadUsersTable() {
+    const tableBody = document.getElementById('usersTableBody');
+    if (!tableBody) return;
 
     try {
-        const now = new Date();
-        let startDate = new Date();
+        // ถอน orderBy ออกชั่วคราวเพื่อป้องกัน Error เรื่อง Index ที่ยังไม่ได้สร้างใน Firestore
+        const snapshot = await db.collection("users").get();
+        tableBody.innerHTML = '';
 
-        if (period === 'daily') {
-            startDate.setHours(0, 0, 0, 0);
-        } else if (period === 'weekly') {
-            const day = now.getDay() || 7;
-            startDate.setHours(0, 0, 0, 0);
-            startDate.setDate(now.getDate() - (day - 1));
-        } else if (period === 'monthly') {
-            startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
-        } else if (period === 'yearly') {
-            startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0);
+        if (snapshot.empty) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">ไม่พบข้อมูลผู้ใช้งาน</td></tr>';
+            return;
         }
 
-        if (dateRangeDisplay) {
-            const options = { year: 'numeric', month: 'short', day: 'numeric' };
-            dateRangeDisplay.textContent = `${startDate.toLocaleDateString('th-TH', options)} - ${now.toLocaleDateString('th-TH', options)}`;
-        }
+        // เรียงลำดับและอัปเดตยอดรวม
+        const docs = [];
+        snapshot.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
+        docs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
-        // ดึงเฉพาะข้อมูลที่สถานะเป็น resolved มาก่อน (เพื่อเลี่ยงการขอ Index ซ้อน)
-        const snapshot = await complaintsCollection
-            .where('status', '==', 'resolved')
-            .get();
+        const countBadge = document.getElementById('userCountBadge');
+        if (countBadge) countBadge.textContent = `ทั้งหมด ${docs.length} คน`;
 
-        const roomGroups = {};
-        const startTimestamp = firebase.firestore.Timestamp.fromDate(startDate);
+        docs.forEach(data => {
+            const id = data.id;
+            const row = document.createElement('tr');
 
-        snapshot.forEach(doc => {
-            const data = doc.data();
+            // กำหนดสี Badge ตามตำแหน่ง
+            let posClass = 'pos-sub-member';
+            if (data.position === 'แอดมิน') posClass = 'pos-admin';
+            else if (data.position === 'ประธานกรรมการสภานักเรียน') posClass = 'pos-president';
+            else if (data.position && data.position.includes('รองประธาน')) posClass = 'pos-v-president';
+            else if (data.position === 'เลขานุการคณะกรรมการสภานักเรียน') posClass = 'pos-secretary';
+            else if (data.position === 'กรรมการสภานักเรียน') posClass = 'pos-member';
 
-            // กรองวันเวลาด้วย JavaScript (Client-side filtering) เพื่อไม่ต้องทำ Composite Index ใน Firebase
-            if (!data.createdAt || data.createdAt.seconds < startTimestamp.seconds) {
-                return;
-            }
+            // ตัวอักษรตัวแรกของชื่อสำหรับ Avatar
+            const firstLetter = (data.displayName || '?').charAt(0).toUpperCase();
 
-            const roomKey = `${data.category || 'ไม่ระบุ'}_${data.roomNumber || 'ไม่ระบุ'}`;
-            const score = parseInt(data.score) || 0;
-
-            if (!roomGroups[roomKey]) {
-                roomGroups[roomKey] = {
-                    category: data.category || '-',
-                    roomNumber: data.roomNumber || '-',
-                    totalScore: 0,
-                    count: 0,
-                    lastScore: score,
-                    lastDate: data.updatedAt ? data.updatedAt.toDate() : (data.createdAt ? data.createdAt.toDate() : new Date())
-                };
-            }
-
-            roomGroups[roomKey].totalScore += score;
-            roomGroups[roomKey].count += 1;
-            roomGroups[roomKey].lastScore = score;
-            const currentDate = data.updatedAt ? data.updatedAt.toDate() : (data.createdAt ? data.createdAt.toDate() : new Date());
-            if (currentDate > roomGroups[roomKey].lastDate) {
-                roomGroups[roomKey].lastDate = currentDate;
-            }
+            row.innerHTML = `
+                <td class="ps-4">
+                    <span class="student-id-label">${data.studentId || '-'}</span>
+                </td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="user-avatar-placeholder me-3">${firstLetter}</div>
+                        <div class="fw-bold text-dark">${data.displayName || '-'}</div>
+                    </div>
+                </td>
+                <td>
+                    <span class="pos-badge ${posClass}">
+                        <i class="bi bi-patch-check-fill"></i> ${data.position || '-'}
+                    </span>
+                </td>
+                <td><span class="text-muted small">${data.email || '-'}</span></td>
+                <td class="pe-4 text-center">
+                    <div class="manage-btn-group">
+                        <button class="btn btn-edit-user edit-user-btn shadow-sm" 
+                                data-id="${id}" title="แก้ไขข้อมูล">
+                            <i class="bi bi-pencil-fill"></i>
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm border-0 reset-password-btn shadow-sm" 
+                                data-id="${id}" data-studentid="${data.studentId}" data-name="${data.displayName}" data-pos="${data.position}"
+                                title="เปลี่ยนรหัสผ่านให้สมาชิก"
+                                style="background: #fff8e1; color: #ffa000; border-radius: 10px; width: 36px; height: 36px;">
+                            <i class="bi bi-key-fill"></i>
+                        </button>
+                        <button class="btn btn-delete-user delete-user-btn shadow-sm" 
+                                data-id="${id}" data-email="${data.email}" title="ลบผู้ใช้งาน"
+                                ${data.role === 'superadmin' ? 'disabled' : ''}>
+                            <i class="bi bi-trash3-fill"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            tableBody.appendChild(row);
         });
 
-        const sortedRooms = Object.values(roomGroups).sort((a, b) => {
-            const avgA = a.totalScore / a.count;
-            const avgB = b.totalScore / b.count;
-            return avgB - avgA;
+        // Add event listeners for edit buttons
+        document.querySelectorAll('.edit-user-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const uid = e.currentTarget.dataset.id;
+                handleEditUser(uid);
+            });
         });
 
-        if (summaryTableBody) {
-            if (sortedRooms.length === 0) {
-                summaryTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-5 text-muted">ยังไม่มีข้อมูลการประเมินที่เสร็จสิ้น (Resolved) ในช่วงเวลาที่เลือก</td></tr>`;
-            } else {
-                summaryTableBody.innerHTML = sortedRooms.map((room, index) => {
-                    const avgScore = (room.totalScore / room.count).toFixed(2);
-                    const rankClass = index === 0 ? 'bg-warning text-dark shadow-sm' : (index === 1 ? 'bg-secondary text-white' : (index === 2 ? 'bg-bronze text-white' : 'bg-light text-dark'));
-                    const rankIcon = index === 0 ? '🥇' : (index === 1 ? '🥈' : (index === 2 ? '🥉' : index + 1));
+        // Add event listeners for delete buttons
+        document.querySelectorAll('.delete-user-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const uid = e.currentTarget.dataset.id;
+                const email = e.currentTarget.dataset.email;
+                handleDeleteUser(uid, email);
+            });
+        });
 
-                    return `
-                        <tr>
-                            <td class="ps-4">
-                                <span class="badge rounded-circle p-2 ${rankClass}" style="width: 35px; height: 35px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem;">
-                                    ${rankIcon}
-                                </span>
-                            </td>
-                            <td>
-                                <div class="fw-bold text-dark">${room.category}</div>
-                                <div class="text-muted small">ห้องเรียนที่ ${room.roomNumber}</div>
-                            </td>
-                            <td class="text-center"><span class="badge bg-light text-dark border rounded-pill px-3">${room.count}</span></td>
-                            <td class="text-center fw-bold text-success fs-5">${room.totalScore}</td>
-                            <td class="text-center">
-                                <div class="d-flex flex-column align-items-center">
-                                    <div class="progress mb-1" style="height: 6px; width: 100px; border-radius: 10px; background-color: #eee;">
-                                        <div class="progress-bar bg-success rounded-pill" style="width: ${(avgScore / 15) * 100}%"></div>
-                                    </div>
-                                    <div class="fw-bold">${avgScore} <small class="text-muted">/ 15</small></div>
-                                </div>
-                            </td>
-                            <td class="pe-4 text-center">
-                                <span class="badge bg-light text-success border rounded-pill px-3">
-                                    <i class="bi bi-calendar-check me-1"></i>
-                                    ${room.lastDate.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })}
-                                </span>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-            }
-        }
+        // Add event listeners for reset password buttons
+        document.querySelectorAll('.reset-password-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const dataset = e.currentTarget.dataset;
+                handleForceResetPassword(dataset.id, dataset.studentid, dataset.name, dataset.pos);
+            });
+        });
 
     } catch (error) {
-        console.error("Error generating summary:", error);
-        if (summaryTableBody) {
-            summaryTableBody.innerHTML = `< tr > <td colspan="6" class="text-center py-5 text-danger">เกิดข้อผิดพลาดในการดึงข้อมูล: ${error.message}</td></tr > `;
-        }
+        console.error("Error loading users:", error);
+        tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-danger">เกิดข้อผิดพลาด: ${error.message}</td></tr>`;
     }
 }
 
+async function handleAddUser() {
+    const { value: formValues } = await Swal.fire({
+        title: 'เพิ่มผู้ใช้งานใหม่',
+        html:
+            `<div class="text-start mb-3">
+                <label class="form-label">เลขประจำตัว 5 หลัก (Username)</label>
+                <input id="swal-input1" class="form-control mb-3" placeholder="เช่น 12345" maxlength="5">
+                
+                <label class="form-label">ชื่อ-นามสกุล</label>
+                <input id="swal-input2" class="form-control mb-3" placeholder="ระบุชื่อผู้ใช้งาน">
+                
+                <label class="form-label">รหัสผ่าน</label>
+                <input id="swal-input3" type="password" class="form-control mb-3" placeholder="กำหนดรหัสผ่าน">
+                
+                <label class="form-label">ตำแหน่ง</label>
+                <select id="swal-input4" class="form-select mb-3">
+                    ${POSITIONS.map(p => `<option value="${p}">${p}</option>`).join('')}
+                </select>
+            </div>`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'บันทึกข้อมูล',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#1b5e20',
+        preConfirm: () => {
+            const studentId = document.getElementById('swal-input1').value;
+            const displayName = document.getElementById('swal-input2').value;
+            const password = document.getElementById('swal-input3').value;
+            const position = document.getElementById('swal-input4').value;
 
+            if (!/^\d{5}$/.test(studentId)) {
+                Swal.showValidationMessage('กรุณากรอกเลขประจำตัว 5 หลักให้ถูกต้อง');
+                return false;
+            }
+            if (!displayName || !password) {
+                Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบถ้วน');
+                return false;
+            }
+            if (password.length < 6) {
+                Swal.showValidationMessage('รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+                return false;
+            }
 
-// ===== ฟังก์ชันสุ่มตรวจห้องเรียน (Random Audit Mode) =====
-function startRandomAudit() {
-    const auditListContainer = document.getElementById('auditListContainer');
-    const modal = new bootstrap.Modal(document.getElementById('auditModal'));
-    modal.show();
-
-    // จำลองการสุ่มเลือกห้อง (ในอนาคตอาจดึงจากรายชื่อห้องทั้งหมดในระบบ)
-    const levels = [
-        'มัธยมศึกษาปีที่ 1', 'มัธยมศึกษาปีที่ 2', 'มัธยมศึกษาปีที่ 3',
-        'มัธยมศึกษาปีที่ 4', 'มัธยมศึกษาปีที่ 5', 'มัธยมศึกษาปีที่ 6'
-    ];
-
-    // สุ่ม 3 ห้องที่ไม่ซ้ำกัน
-    const selectedRooms = [];
-    while (selectedRooms.length < 3) {
-        const randomLevel = levels[Math.floor(Math.random() * levels.length)];
-        const randomRoom = Math.floor(Math.random() * 10) + 1; // สมมติว่ามี 10 ห้องต่อชั้น
-        const roomObj = { level: randomLevel, room: randomRoom };
-
-        // เช็คซ้ำ
-        const isDuplicate = selectedRooms.some(r => r.level === randomLevel && r.room === randomRoom);
-        if (!isDuplicate) {
-            selectedRooms.push(roomObj);
+            return { studentId, displayName, password, position };
         }
-    }
-
-    // หน่วงเวลาเล็กน้อยเพื่อความสมจริง
-    setTimeout(() => {
-        auditListContainer.innerHTML = selectedRooms.map((item, index) => `
-                        < div class="col-md-4" >
-                            <div class="card border-0 shadow-sm h-100 audit-card">
-                                <div class="card-body text-center p-4">
-                                    <div class="badge bg-primary-subtle text-primary mb-3 rounded-pill px-3">เป้าหมายที่ ${index + 1}</div>
-                                    <h4 class="fw-bold text-dark mb-1">${item.level}</h4>
-                                    <div class="display-4 fw-bold text-primary mb-3">ห้อง ${item.room}</div>
-                                    <div class="d-grid">
-                                        <button class="btn btn-outline-primary btn-sm rounded-pill" onclick="printAuditForm('${item.level}', '${item.room}')">
-                                            <i class="bi bi-printer me-2"></i>พิมพ์แบบประเมิน
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-            </div >
-                        `).join('');
-    }, 1500);
-}
-
-// ===== ฟังก์ชันพิมพ์แบบฟอร์มตรวจสอบ =====
-function printAuditForm(level, room) {
-    const printableArea = document.getElementById('printableArea');
-    const today = new Date().toLocaleDateString('th-TH', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        weekday: 'long'
     });
 
-    printableArea.innerHTML = `
-                        < div class="audit-paper" >
-            <div class="audit-header">
-                <div class="audit-logo">
-                    <img src="logo.png" alt="Logo" style="width: 80px; height: 80px;">
-                </div>
-                <div class="audit-title">แบบฟอร์มการตรวจสอบห้องเรียนสะอาด (Audit)</div>
-                <div class="audit-subtitle">สภานักเรียนโรงเรียนสุรวิทยาคาร</div>
-                <div style="font-size: 14pt; margin-top: 10px;">วันที่: ${today}</div>
-            </div>
+    if (formValues) {
+        try {
+            Swal.fire({
+                title: 'กำลังบันทึกข้อมูล...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
 
-            <div class="audit-info">
-                ระดับชั้น: ${level} &nbsp;&nbsp;|&nbsp;&nbsp; ห้องที่: ${room}
-            </div>
+            // สร้าง Email จำลองสำหรับ Firebase Auth
+            const email = `${formValues.studentId}@council.internal`;
 
-            <div class="audit-checklist">
-                <h3 style="border-bottom: 2px solid #ddd; padding-bottom: 5px;">รายการตรวจสอบ</h3>
+            // ใช้ Secondary App Trick เพื่อสร้าง User โดยไม่หลุดจาก Session ปัจจุบัน
+            const secondaryApp = firebase.initializeApp(firebaseConfig, "secondary");
+            const secondaryAuth = secondaryApp.auth();
+
+            const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, formValues.password);
+            const uid = userCredential.user.uid;
+
+            // บันทึกลง Firestore
+            await db.collection("users").doc(uid).set({
+                studentId: formValues.studentId,
+                displayName: formValues.displayName,
+                email: email,
+                position: formValues.position,
+                role: formValues.position === 'แอดมิน' ? 'admin' : 'staff',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            // ลบ Secondary App
+            await secondaryApp.delete();
+
+            Swal.fire('สำเร็จ', 'เพิ่มผู้ใช้งานเรียบร้อยแล้ว', 'success');
+            loadUsersTable();
+
+        } catch (error) {
+            console.error("Error adding user:", error);
+            let msg = 'ไม่สามารถเพิ่มผู้ใช้งานได้';
+            if (error.code === 'auth/email-already-in-use') msg = 'เลขประจำตัวนี้มีอยู่ในระบบแล้ว';
+            Swal.fire('ผิดพลาด', msg + ' (' + error.message + ')', 'error');
+        }
+    }
+}
+
+async function handleDeleteUser(uid, email) {
+    const result = await Swal.fire({
+        title: 'ยืนยันการลบ?',
+        text: `คุณต้องการลบผู้ใช้งาน ${email} หรือไม่?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'ยืนยันการลบ',
+        cancelButtonText: 'ยกเลิก'
+    });
+
+    if (result.isConfirmed) {
+        try {
+            await db.collection("users").doc(uid).delete();
+            Swal.fire('สำเร็จ', 'ลบผู้ใช้งานเรียบร้อยแล้ว', 'success');
+            loadUsersTable();
+        } catch (error) {
+            console.error("Error deleting user:", error);
+            Swal.fire('ผิดพลาด', 'ไม่สามารถลบผู้ใช้งานได้', 'error');
+        }
+    }
+}
+
+// ===== ฟังก์ชันจัดการรหัสผ่าน =====
+
+async function handleChangeOwnPassword() {
+    const { value: formValues } = await Swal.fire({
+        title: 'เปลี่ยนรหัสผ่านใหม่',
+        html:
+            `<div class="text-start mb-3">
+                <label class="form-label">รหัสผ่านใหม่</label>
+                <input id="swal-new-password" type="password" class="form-control mb-3" placeholder="ระบุรหัสผ่านใหม่">
+                <label class="form-label">ยืนยันรหัสผ่านใหม่</label>
+                <input id="swal-confirm-password" type="password" class="form-control mb-3" placeholder="ระบุรหัสผ่านใหม่อีกครั้ง">
+                <small class="text-muted">หมายเหตุ: คุณอาจถูกให้ออกจากระบบและต้องล็อกอินใหม่เพื่อความปลอดภัย</small>
+            </div>`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'อัปเดตรหัสผ่าน',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#1b5e20',
+        preConfirm: () => {
+            const newPass = document.getElementById('swal-new-password').value;
+            const confirmPass = document.getElementById('swal-confirm-password').value;
+
+            if (!newPass || !confirmPass) {
+                Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบถ้วน');
+                return false;
+            }
+            if (newPass.length < 6) {
+                Swal.showValidationMessage('รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+                return false;
+            }
+            if (newPass !== confirmPass) {
+                Swal.showValidationMessage('รหัสผ่านไม่ตรงกัน');
+                return false;
+            }
+
+            return newPass;
+        }
+    });
+
+    if (formValues) {
+        try {
+            Swal.fire({
+                title: 'กำลังอัปเดตรหัสผ่าน...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            await currentUser.updatePassword(formValues);
+
+            await Swal.fire({
+                icon: 'success',
+                title: 'สำเร็จ',
+                text: 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว กรุณาเข้าสู่ระบบใหม่อีกครั้ง',
+                confirmButtonColor: '#1b5e20'
+            });
+
+            // ออกจากระบบเพื่อให้ล็อกอินใหม่ด้วยรหัสใหม่
+            handleAdminLogout();
+
+        } catch (error) {
+            console.error("Change password error:", error);
+            if (error.code === 'auth/requires-recent-login') {
+                Swal.fire('ความปลอดภัยสูง', 'กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่หนึ่งครั้ง ก่อนทำการเปลี่ยนรหัสผ่าน', 'info');
+            } else {
+                Swal.fire('ผิดพลาด', 'ไม่สามารถเปลี่ยนรหัสผ่านได้: ' + error.message, 'error');
+            }
+        }
+    }
+}
+
+async function handleForceResetPassword(uid, studentId, name, position) {
+    const result = await Swal.fire({
+        title: 'เปลี่ยนรหัสผ่านให้สมาชิก',
+        text: `เนื่องจากนโยบายความปลอดภัยของ Firebase แอดมินต้อง "ลบบัญชีเดิม" แล้วกด "เพิ่มใหม่ด้วยรหัสใหม่" ครับ (ระบบจะช่วยกรอกข้อมูลอัตโนมัติ)`,
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#1b5e20',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'ตกลง, เริ่มขั้นตอน',
+        cancelButtonText: 'ยกเลิก'
+    });
+
+    if (result.isConfirmed) {
+        // ขั้นตอนที่ 1: ลบผู้ใช้เดิม
+        const deleteConfirm = await Swal.fire({
+            title: 'ยืนยันการลบบัญชีเก่า?',
+            text: `คุณกำลังจะลบบัญชี ${name} เพื่อเตรียมสร้างใหม่ด้วยรหัสใหม่`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'ลบข้อมูลเดิม'
+        });
+
+        if (deleteConfirm.isConfirmed) {
+            try {
+                await db.collection("users").doc(uid).delete();
+
+                // ขั้นตอนที่ 2: เปิดหน้าต่างเพิ่มผู้ใช้ใหม่พร้อมกรอกข้อมูลเดิมให้
+                Swal.fire({
+                    title: 'กำลังเตรียมระบบ...',
+                    timer: 1000,
+                    didOpen: () => { Swal.showLoading(); }
+                }).then(() => {
+                    // เรียกฟังก์ชันเพิ่มผู้ใช้พร้อม Pre-fill ข้อมูล
+                    handleAddUserWithDefault(studentId, name, position);
+                });
+            } catch (error) {
+                Swal.fire('ผิดพลาด', 'ไม่สามารถลบข้อมูลได้: ' + error.message, 'error');
+            }
+        }
+    }
+}
+
+async function handleAddUserWithDefault(defaultId, defaultName, defaultPos) {
+    const { value: formValues } = await Swal.fire({
+        title: 'กำหนดรหัสผ่านใหม่',
+        html:
+            `<div class="text-start mb-3">
+                <p class="small text-muted mb-4">ระบบได้ดึงข้อมูลเดิมมาให้แล้ว กรุณากำหนดรหัสผ่านใหม่ที่ต้องการ</p>
+                <label class="form-label">เลขประจำตัว 5 หลัก</label>
+                <input id="swal-input1" class="form-control mb-3 bg-light" value="${defaultId}" readonly>
                 
-                <div class="checklist-item">
-                    <span>1. ความสะอาดพื้นห้อง (กวาด/ถู)</span>
-                    <div class="score-box"></div>
-                </div>
-                <div class="checklist-item">
-                    <span>2. การจัดโต๊ะและเก้าอี้เป็นระเบียบ</span>
-                    <div class="score-box"></div>
-                </div>
-                <div class="checklist-item">
-                    <span>3. ถังขยะ (มีการคัดแยก/ไม่ล้น)</span>
-                    <div class="score-box"></div>
-                </div>
-                <div class="checklist-item">
-                    <span>4. กระดานดำ/ไวท์บอร์ดสะอาด</span>
-                    <div class="score-box"></div>
-                </div>
-                <div class="checklist-item">
-                    <span>5. ความเรียบร้อยทั่วไป (หลังตู้/มุมห้อง)</span>
-                    <div class="score-box"></div>
-                </div>
-            </div>
+                <label class="form-label">ชื่อ-นามสกุล</label>
+                <input id="swal-input2" class="form-control mb-3" value="${defaultName}" placeholder="ระบุชื่อผู้ใช้งาน">
+                
+                <label class="form-label">รหัสผ่านใหม่</label>
+                <input id="swal-input3" type="password" class="form-control mb-3" placeholder="ระบุรหัสผ่านใหม่ที่ต้องการ">
+                
+                <label class="form-label">ตำแหน่ง</label>
+                <select id="swal-input4" class="form-select mb-3">
+                    ${POSITIONS.map(p => `<option value="${p}" ${p === defaultPos ? 'selected' : ''}>${p}</option>`).join('')}
+                </select>
+            </div>`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'บันทึกรหัสผ่านใหม่',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#1b5e20',
+        preConfirm: () => {
+            const studentId = document.getElementById('swal-input1').value;
+            const displayName = document.getElementById('swal-input2').value;
+            const password = document.getElementById('swal-input3').value;
+            const position = document.getElementById('swal-input4').value;
 
-            <div style="margin-top: 30px; border: 1px solid #000; padding: 15px; height: 150px;">
-                <strong>ข้อเสนอแนะเพิ่มเติม:</strong>
-            </div>
+            if (!password || password.length < 6) {
+                Swal.showValidationMessage('กรุณากำหนดรหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)');
+                return false;
+            }
 
-            <div class="signature-section">
-                <div class="signature-box">
-                    <div class="signature-line"></div>
-                    <div>(....................................................)</div>
-                    <div>หัวหน้าห้อง/ตัวแทนห้อง</div>
-                    <div>ผู้รับการตรวจ</div>
-                </div>
-                <div class="signature-box">
-                    <div class="signature-line"></div>
-                    <div>(....................................................)</div>
-                    <div>กรรมการนักเรียน</div>
-                    <div>ผู้ตรวจสอบ</div>
-                </div>
-            </div>
-        </div >
-                        `;
+            return { studentId, displayName, password, position };
+        }
+    });
 
-    // สั่งพิมพ์
-    window.print();
+    if (formValues) {
+        // ใช้ตรรกะเดียวกับ handleAddUser
+        try {
+            Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+            const email = `${formValues.studentId}@council.internal`;
+            const secondaryApp = firebase.initializeApp(firebaseConfig, "secondary-reset-" + Date.now());
+            const secondaryAuth = secondaryApp.auth();
+            const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, formValues.password);
+            const uid = userCredential.user.uid;
+            await db.collection("users").doc(uid).set({
+                studentId: formValues.studentId,
+                displayName: formValues.displayName,
+                email: email,
+                position: formValues.position,
+                role: formValues.position === 'แอดมิน' ? 'admin' : 'staff',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            await secondaryApp.delete();
+            Swal.fire('สำเร็จ', 'เปลี่ยนรหัสผ่านให้สมาชิกเรียบร้อยแล้ว', 'success');
+            loadUsersTable();
+        } catch (error) {
+            Swal.fire('ผิดพลาด', 'ไม่สามารถสร้างบัญชีใหม่ได้: ' + error.message, 'error');
+        }
+    } else {
+        // ถ้ากดยกเลิกกลางคัน ให้โหลดตารางใหม่ (ข้อมูล Firestore เดิมถูกลบไปแล้วแต่ใน Auth อาจยังอยู่ถ้าเกิด Error)
+        loadUsersTable();
+    }
+}
+
+async function handleSendResetLink(email) {
+    // ฟังก์ชันเดิมสำรองไว้สำหรับคนที่มีอีเมลจริง
+    try {
+        await auth.sendPasswordResetEmail(email);
+        Swal.fire('สำเร็จ', `ระบบได้ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ ${email} เรียบร้อยแล้ว`, 'success');
+    } catch (error) {
+        Swal.fire('ผิดพลาด', error.message, 'error');
+    }
+}
+
+
+
+async function handleEditUser(uid) {
+    try {
+        const userDoc = await db.collection("users").doc(uid).get();
+        if (!userDoc.exists) return;
+        const userData = userDoc.data();
+
+        const { value: formValues } = await Swal.fire({
+            title: 'แก้ไขข้อมูลผู้ใช้งาน',
+            html:
+                `<div class="text-start mb-3">
+                    <label class="form-label">เลขประจำตัว 5 หลัก (ไม่สามารถแก้ไขได้)</label>
+                    <input id="swal-edit-input1" class="form-control mb-3 bg-light" value="${userData.studentId || ''}" readonly>
+                    
+                    <label class="form-label">ชื่อ-นามสกุล</label>
+                    <input id="swal-edit-input2" class="form-control mb-3" value="${userData.displayName || ''}" placeholder="ระบุชื่อผู้ใช้งาน">
+                    
+                    <label class="form-label">ตำแหน่ง</label>
+                    <select id="swal-edit-input3" class="form-select mb-3">
+                        ${POSITIONS.map(p => `<option value="${p}" ${userData.position === p ? 'selected' : ''}>${p}</option>`).join('')}
+                    </select>
+                    <small class="text-muted">หมายเหตุ: หากต้องการเปลี่ยนรหัสผ่าน กรุณาลบและเพิ่มผู้ใช้ใหม่</small>
+                </div>`,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'บันทึกการแก้ไข',
+            cancelButtonText: 'ยกเลิก',
+            confirmButtonColor: '#1b5e20',
+            preConfirm: () => {
+                const displayName = document.getElementById('swal-edit-input2').value;
+                const position = document.getElementById('swal-edit-input3').value;
+
+                if (!displayName) {
+                    Swal.showValidationMessage('กรุณากรอกชื่อ-นามสกุล');
+                    return false;
+                }
+
+                return { displayName, position };
+            }
+        });
+
+        if (formValues) {
+            Swal.fire({
+                title: 'กำลังบันทึกการแก้ไข...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            await db.collection("users").doc(uid).update({
+                displayName: formValues.displayName,
+                position: formValues.position,
+                role: formValues.position === 'แอดมิน' ? 'admin' : 'staff',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            Swal.fire('สำเร็จ', 'แก้ไขข้อมูลเรียบร้อยแล้ว', 'success');
+            loadUsersTable();
+        }
+    } catch (error) {
+        console.error("Error editing user:", error);
+        Swal.fire('ผิดพลาด', 'ไม่สามารถแก้ไขข้อมูลได้', 'error');
+    }
+}
+// ===== ฟังก์ชันแสดงผลปฏิทินสรุปรายวัน =====
+function renderComplaintCalendar(dailyCounts) {
+    const calendarGrid = document.getElementById('calendarGrid');
+    if (!calendarGrid) return;
+
+    const now = new Date();
+    const year = calendarSelectedYear;
+    const month = calendarSelectedMonth;
+
+    // หาจำนวนวันในเดือนและวันแรกของเดือน
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    calendarGrid.innerHTML = '';
+
+    // วันว่างช่วงต้นเดือน (เพื่อให้วันที่ 1 ตรงตามวันจริง)
+    for (let i = 0; i < firstDay; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'calendar-day empty';
+        calendarGrid.appendChild(emptyCell);
+    }
+
+    // สร้างวันที่ 1 จนถึงวันสุดท้ายของเดือน
+    for (let day = 1; day <= daysInMonth; day++) {
+        const count = dailyCounts[day] || 0;
+        const dayCell = document.createElement('div');
+        dayCell.className = 'calendar-day';
+
+        if (day === now.getDate() && month === now.getMonth() && year === now.getFullYear()) {
+            dayCell.classList.add('today');
+        }
+
+        if (count > 0) {
+            dayCell.classList.add('has-data');
+            // ถ้ามีการร้องเรียนเยอะ (มากกว่า 5 เรื่อง) ให้ใช้สีแดงแจ้งเตือน
+            if (count > 5) dayCell.classList.add('has-data-high');
+
+            // ทำให้กดดูรายละเอียดได้
+            dayCell.style.cursor = 'pointer';
+            dayCell.addEventListener('click', () => showDailyDetails(day, month, year));
+        }
+
+        dayCell.innerHTML = `
+            <div class="day-number">${day}</div>
+            <div class="complaint-count-wrapper">
+                <span class="complaint-count-badge" title="${count} เรื่อง">${count}</span>
+            </div>
+        `;
+        calendarGrid.appendChild(dayCell);
+    }
+}
+
+async function showDailyDetails(day, month, year) {
+    const months = [
+        "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+        "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+    ];
+
+    const dateStr = `${day} ${months[month]} ${year + 543}`;
+
+    Swal.fire({
+        title: `รายการร้องเรียนวันที่ ${dateStr}`,
+        html: '<div id="dailyComplaintsList" class="text-start" style="max-height: 60vh; overflow-y: auto; padding: 10px;"><div class="text-center py-5"><div class="spinner-border text-success" role="status"></div><p class="mt-2 text-muted">กำลังโหลดข้อมูล...</p></div></div>',
+        width: '700px',
+        showConfirmButton: false,
+        showCloseButton: true,
+        background: '#f8fafc',
+        customClass: {
+            container: 'premium-swal-container',
+            title: 'fw-bold text-success pt-4'
+        }
+    });
+
+    try {
+        const startOfDay = new Date(year, month, day);
+        const endOfDay = new Date(year, month, day, 23, 59, 59);
+
+        const snapshot = await complaintsCollection
+            .where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(startOfDay))
+            .where('createdAt', '<=', firebase.firestore.Timestamp.fromDate(endOfDay))
+            .get();
+
+        const listEl = document.getElementById('dailyComplaintsList');
+        if (snapshot.empty) {
+            listEl.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="bi bi-clipboard-x text-muted" style="font-size: 3rem;"></i>
+                    <p class="mt-3 text-muted">ไม่พบข้อมูลการร้องเรียนในวันนี้</p>
+                </div>`;
+            return;
+        }
+
+        let html = '';
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const docId = doc.id;
+
+            // กำหนดสีสถานะแบบเดียวกับตารางหลัก
+            let statusClass = 'status-waiting';
+            if (data.status === 'accepted') statusClass = 'status-accepted';
+            else if (data.status === 'in-progress') statusClass = 'status-in-progress';
+            else if (data.status === 'resolved') statusClass = 'status-resolved';
+            else if (data.status === 'rejected') statusClass = 'status-rejected';
+
+            html += `
+                <div class="daily-complaint-item animate__animated animate__fadeInUp">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="daily-ticket-badge">#${data.ticketId}</span>
+                        <span class="status-badge status-${data.status || 'pending'} shadow-sm" style="font-size: 0.75rem; padding: 6px 14px;">
+                             ${getStatusText(data.status)}
+                        </span>
+                    </div>
+                    <div class="daily-title">${data.title}</div>
+                    <div class="daily-desc">${data.description ? (data.description.length > 150 ? data.description.substring(0, 150) + '...' : data.description) : 'ไม่มีรายละเอียดเพิ่มเติม'}</div>
+                    <div class="daily-meta-grid">
+                        <div class="daily-meta-item">
+                            <i class="bi bi-folder-fill"></i>
+                            <span>${data.category}</span>
+                        </div>
+                        <div class="daily-meta-item">
+                            <i class="bi bi-person-fill"></i>
+                            <span>${data.reporterName || 'ไม่ระบุตัวตน'}</span>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <button class="btn daily-manage-link" onclick="handleViewDetails('${docId}')">
+                            <i class="bi bi-pencil-square"></i> ดูและจัดการเรื่องนี้
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        listEl.innerHTML = html;
+
+    } catch (error) {
+        console.error("Error fetching daily details:", error);
+        document.getElementById('dailyComplaintsList').innerHTML =
+            '<div class="alert alert-danger shadow-sm rounded-4">เกิดข้อผิดพลาดในการโหลดข้อมูล: ' + error.message + '</div>';
+    }
+}
+
+// ===== ฟังก์ชันจัดการตัวเลือกปฏิทิน =====
+function initCalendarSelectors() {
+    const monthSelect = document.getElementById('calendarMonthSelect');
+    const yearSelect = document.getElementById('calendarYearSelect');
+    const todayBtn = document.getElementById('calendarTodayBtn');
+
+    if (!monthSelect || !yearSelect) return;
+
+    // เติมรายชื่อเดือน
+    const months = [
+        "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+        "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+    ];
+
+    months.forEach((m, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = m;
+        opt.selected = i === calendarSelectedMonth;
+        monthSelect.appendChild(opt);
+    });
+
+    // เติมปี (2569 - 2570)
+    for (let y = 2026; y <= 2027; y++) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y + 543; // พ.ศ.
+        opt.selected = y === calendarSelectedYear;
+        yearSelect.appendChild(opt);
+    }
+
+    // Event Listeners
+    monthSelect.addEventListener('change', (e) => {
+        calendarSelectedMonth = parseInt(e.target.value);
+        loadStatistics(); // รีโหลดสถิติเพื่อคำนวณ dailyCounts ใหม่
+    });
+
+    yearSelect.addEventListener('change', (e) => {
+        calendarSelectedYear = parseInt(e.target.value);
+        loadStatistics();
+    });
+
+    if (todayBtn) {
+        todayBtn.addEventListener('click', () => {
+            const now = new Date();
+            calendarSelectedMonth = now.getMonth();
+            calendarSelectedYear = now.getFullYear();
+
+            monthSelect.value = calendarSelectedMonth;
+            yearSelect.value = calendarSelectedYear;
+
+            loadStatistics();
+        });
+    }
 }
