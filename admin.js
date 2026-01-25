@@ -7,7 +7,21 @@ let categoryChart = null; // สำหรับกราฟหมวดหมู
 let trendChart = null; // สำหรับกราฟเทรนด์ประจำเดือน
 let reporterChart = null; // สำหรับกราฟประเภทผู้ร้องเรียน
 let sessionInterval = null; // สำหรับเช็คเวลาหมดอายุ
+let userProfile = null; // สำหรับเก็บข้อมูลโปรไฟล์ผู้ใช้ปัจจุบัน
+let calendarSelectedMonth = new Date().getMonth(); // เดือนที่เลือกในปฏิทิน (0-11)
+let calendarSelectedYear = new Date().getFullYear(); // ปีที่เลือกในปฏิทิน
 const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 นาที (หน่วยเป็นมิลลิวินาที)
+
+// รายชื่อตำแหน่งที่กำหนด
+const POSITIONS = [
+    "แอดมิน",
+    "ประธานกรรมการสภานักเรียน",
+    "รองประธานกรรมการสภานักเรียน คนที่หนึ่ง",
+    "รองประธานกรรมการสภานักเรียน คนที่สอง",
+    "เลขานุการคณะกรรมการสภานักเรียน",
+    "กรรมการสภานักเรียน",
+    "อนุกรรมการสภานักเรียน"
+];
 
 // ===== ฟังก์ชันเริ่มต้น =====
 document.addEventListener('DOMContentLoaded', function () {
@@ -15,15 +29,53 @@ document.addEventListener('DOMContentLoaded', function () {
     complaintsCollection = db.collection("complaints");
 
     // ตรวจสอบสถานะการล็อกอิน
-    auth.onAuthStateChanged(user => {
+    auth.onAuthStateChanged(async user => {
         if (user) {
-            // ผู้ใช้ล็อกอินอยู่แล้ว
             currentUser = user;
-            showDashboard();
-            loadDashboardData();
-            startSessionTimer(); // เริ่มจับเวลาเซสชัน
+
+            try {
+                // ดึงข้อมูลโปรไฟล์จาก Firestore
+                const userDoc = await db.collection("users").doc(user.uid).get();
+                if (userDoc.exists) {
+                    userProfile = userDoc.data();
+                    // บังคับให้เป็น superadmin ถ้าเป็นอีเมลตามที่กำหนด (ทำเพื่อความปลอดภัยกรณีข้อมูลใน DB ผิด)
+                    if (user.email && user.email.toLowerCase() === "admin@student.sura.ac.th") {
+                        userProfile.role = "superadmin";
+                    }
+                } else {
+                    // ถ้าไม่มีข้อมูลใน Firestore ให้สร้างโปรไฟล์ตั้งต้น
+                    userProfile = {
+                        role: (user.email && user.email.toLowerCase() === "admin@student.sura.ac.th") ? "superadmin" : "admin",
+                        displayName: user.email,
+                        position: "แอดมิน"
+                    };
+
+                    // บันทึกข้อมูลเบื้องต้นลง Firestore ด้วย
+                    await db.collection("users").doc(user.uid).set({
+                        email: user.email,
+                        displayName: userProfile.displayName,
+                        position: userProfile.position,
+                        role: userProfile.role,
+                        studentId: "",
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+
+                showDashboard();
+                loadDashboardData();
+                startSessionTimer();
+            } catch (error) {
+                console.error("Error fetching user profile:", error);
+                // Fallback กรณี error
+                userProfile = { role: "admin", displayName: user.email };
+                showDashboard();
+                loadDashboardData();
+                startSessionTimer();
+            }
         } else {
             // ยังไม่ล็อกอิน
+            currentUser = null;
+            userProfile = null;
             stopSessionTimer();
             showLogin();
         }
@@ -31,6 +83,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ตั้งค่า Event Listeners
     setupAdminEventListeners();
+    initCalendarSelectors();
 
     // ===== Cookie Consent Logic =====
     const cookieConsent = document.getElementById('cookieConsent');
@@ -72,10 +125,12 @@ function setupAdminEventListeners() {
     const searchInput = document.getElementById('searchInput');
     const categoryFilter = document.getElementById('categoryFilter');
     const statusFilter = document.getElementById('statusFilter');
+    const timeFilter = document.getElementById('timeFilter');
 
     if (searchInput) searchInput.addEventListener('input', () => loadComplaintsTable());
     if (categoryFilter) categoryFilter.addEventListener('change', () => loadComplaintsTable());
     if (statusFilter) statusFilter.addEventListener('change', () => loadComplaintsTable());
+    if (timeFilter) timeFilter.addEventListener('change', () => loadComplaintsTable());
 
     // ปุ่ม Export
     const exportBtn = document.getElementById('exportDataBtn');
@@ -86,6 +141,28 @@ function setupAdminEventListeners() {
     const exportPDFBtn = document.getElementById('exportPDFBtn');
     if (exportPDFBtn) {
         exportPDFBtn.addEventListener('click', exportToPDF);
+    }
+
+    // ปุ่มเปลี่ยนรหัสผ่านตนเอง
+    const changePasswordBtn = document.getElementById('changePasswordBtn');
+    if (changePasswordBtn) {
+        changePasswordBtn.addEventListener('click', handleChangeOwnPassword);
+    }
+
+    // ปุ่มจัดการผู้ใช้งาน
+    const manageUsersBtn = document.getElementById('manageUsersBtn');
+    if (manageUsersBtn) {
+        manageUsersBtn.addEventListener('click', showUserManagement);
+    }
+
+    const backToDashboardBtn = document.getElementById('backToDashboardBtn');
+    if (backToDashboardBtn) {
+        backToDashboardBtn.addEventListener('click', hideUserManagement);
+    }
+
+    const addUserBtn = document.getElementById('addUserBtn');
+    if (addUserBtn) {
+        addUserBtn.addEventListener('click', handleAddUser);
     }
 }
 
@@ -103,7 +180,13 @@ async function handleAdminLogin(e) {
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>กำลังเข้าสู่ระบบ...';
         submitBtn.disabled = true;
 
-        await auth.signInWithEmailAndPassword(email, password);
+        let finalEmail = email;
+        // ถ้าเป็นตัวเลข 5 หลัก ให้ถือว่าเป็นเลขประจำตัว
+        if (/^\d{5}$/.test(email)) {
+            finalEmail = `${email}@council.internal`;
+        }
+
+        await auth.signInWithEmailAndPassword(finalEmail, password);
 
         // บันทึกเวลาที่ล็อกอินลงใน localStorage
         localStorage.setItem('adminLoginTime', Date.now());
@@ -259,9 +342,57 @@ async function handleSessionTimeout() {
 function showDashboard() {
     document.getElementById('loginSection').classList.add('d-none');
     document.getElementById('dashboardSection').classList.remove('d-none');
+    document.getElementById('userManagementSection').classList.add('d-none');
 
-    // แสดงชื่อผู้ใช้
-    document.getElementById('adminName').textContent = currentUser.email;
+    // ตรวจสอบความปลอดภัยผ่านอีเมลโดยตรงร่วมด้วย
+    const isSuperAdmin = (currentUser && currentUser.email && currentUser.email.toLowerCase() === "admin@student.sura.ac.th") ||
+        (userProfile && userProfile.role === 'superadmin');
+
+    // แสดงชื่อและตำแหน่งผู้ใช้
+    if (currentUser) {
+        document.getElementById('adminName').textContent = (userProfile && userProfile.displayName) || currentUser.email;
+
+        // แสดงตำแหน่งที่ระบุในจัดการผู้ใช้
+        const positionSmall = document.querySelector('#adminName + small') || document.querySelector('.text-white-50');
+        if (positionSmall) {
+            if (currentUser && currentUser.email && currentUser.email.toLowerCase() === "admin@student.sura.ac.th") {
+                positionSmall.textContent = "แอดมินสูงสุด";
+            } else if (userProfile && userProfile.position) {
+                positionSmall.textContent = userProfile.position;
+            } else if (isSuperAdmin) {
+                positionSmall.textContent = "แอดมินสูงสุด";
+            } else {
+                positionSmall.textContent = "ผู้ดูแลระบบ";
+            }
+        }
+
+        // แสดงปุ่มจัดการผู้ใช้งาน
+        const manageBtn = document.getElementById('manageUsersBtn');
+        if (manageBtn) {
+            if (isSuperAdmin) {
+                manageBtn.classList.remove('d-none');
+            } else {
+                manageBtn.classList.add('d-none');
+            }
+        }
+    }
+}
+
+function showUserManagement() {
+    const isSuperAdmin = (currentUser && currentUser.email && currentUser.email.toLowerCase() === "admin@student.sura.ac.th") ||
+        (userProfile && userProfile.role === 'superadmin');
+
+    if (isSuperAdmin) {
+        document.getElementById('dashboardSection').classList.add('d-none');
+        document.getElementById('userManagementSection').classList.remove('d-none');
+        loadUsersTable();
+    } else {
+        showAdminAlert('คุณไม่มีสิทธิ์เข้าถึงส่วนนี้', 'error');
+    }
+}
+
+function hideUserManagement() {
+    showDashboard();
 }
 
 function showLogin() {
@@ -302,6 +433,9 @@ async function loadStatistics() {
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
         const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
         const sevenDaysAgo = now.getTime() - (7 * 24 * 60 * 60 * 1000);
+
+        // สำหรับปฏิทินรายวัน (เดือนปัจจุบัน)
+        const dailyCounts = {};
 
         // สำหรับกราฟหมวดหมู่
         const categoryCounts = {
@@ -345,6 +479,12 @@ async function loadStatistics() {
                 if (createdTime >= todayStart) todayCount++;
                 if (createdTime >= sevenDaysAgo) weekCount++;
                 if (createdTime >= thisMonthStart) monthCount++;
+
+                // นับสำหรับปฏิทินรายวัน (ตามเดือน/ปีที่เลือก)
+                if (createdAt.getMonth() === calendarSelectedMonth && createdAt.getFullYear() === calendarSelectedYear) {
+                    const dayNum = createdAt.getDate();
+                    dailyCounts[dayNum] = (dailyCounts[dayNum] || 0) + 1;
+                }
 
                 // นับเทรนด์รายเดือนสำหรับกราฟ
                 const monthKey = createdAt.toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
@@ -544,6 +684,9 @@ async function loadStatistics() {
             reporterCounts
         );
 
+        // แสดงปฏิทินสรุปรายวัน
+        renderComplaintCalendar(dailyCounts);
+
     } catch (error) {
         console.error("Error loading statistics:", error);
     }
@@ -564,15 +707,23 @@ function loadComplaintsTable() {
             const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
             const categoryFilter = document.getElementById('categoryFilter')?.value || '';
             const statusFilter = document.getElementById('statusFilter')?.value || '';
+            const timeFilter = document.getElementById('timeFilter')?.value || '';
 
             tableBody.innerHTML = '';
 
             let filteredDocs = [];
+
+            // เตรียมตัวแปรสำหรับเช็คเวลา
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+            const yearStart = new Date(now.getFullYear(), 0, 1).getTime();
+
             snapshot.forEach(doc => {
                 const data = doc.data();
                 const id = doc.id;
 
-                // ค้นหาและฟิลเตอร์
+                // ค้นหาและฟิลเตอร์พื้นฐาน
                 const matchesSearch = !searchTerm ||
                     (data.ticketId && data.ticketId.toLowerCase().includes(searchTerm)) ||
                     (data.title && data.title.toLowerCase().includes(searchTerm));
@@ -584,7 +735,16 @@ function loadComplaintsTable() {
                     (data.status === statusFilter) ||
                     (statusFilter === 'waiting' && data.status === 'pending');
 
-                if (matchesSearch && matchesCategory && matchesStatus) {
+                // ฟิลเตอร์ช่วงเวลา
+                let matchesTime = true;
+                if (timeFilter && data.createdAt) {
+                    const createdTime = data.createdAt.toDate().getTime();
+                    if (timeFilter === 'daily') matchesTime = createdTime >= todayStart;
+                    else if (timeFilter === 'monthly') matchesTime = createdTime >= monthStart;
+                    else if (timeFilter === 'yearly') matchesTime = createdTime >= yearStart;
+                }
+
+                if (matchesSearch && matchesCategory && matchesStatus && matchesTime) {
                     filteredDocs.push({ id, ...data });
                 }
             });
@@ -726,8 +886,20 @@ function addTableEventListeners() {
 }
 
 // ===== ฟังก์ชันดูรายละเอียด =====
-async function handleViewDetails(e) {
-    const complaintId = e.target.closest('button').dataset.id;
+// ===== ฟังก์ชันดูรายละเอียด =====
+async function handleViewDetails(complaintIdOrEvent) {
+    let complaintId;
+
+    // รองรับทั้งการเรียกจาก Event และเรียกด้วย ID โดยตรง
+    if (typeof complaintIdOrEvent === 'string') {
+        complaintId = complaintIdOrEvent;
+    } else {
+        const btn = complaintIdOrEvent.target.closest('button');
+        if (!btn) return;
+        complaintId = btn.dataset.id;
+    }
+
+    if (!complaintId) return;
 
     try {
         const doc = await complaintsCollection.doc(complaintId).get();
@@ -1424,4 +1596,678 @@ async function exportToPDF() {
     }
 }
 
+// ===== ฟังก์ชันจัดการผู้ใช้งาน (User Management) =====
 
+async function loadUsersTable() {
+    const tableBody = document.getElementById('usersTableBody');
+    if (!tableBody) return;
+
+    try {
+        // ถอน orderBy ออกชั่วคราวเพื่อป้องกัน Error เรื่อง Index ที่ยังไม่ได้สร้างใน Firestore
+        const snapshot = await db.collection("users").get();
+        tableBody.innerHTML = '';
+
+        if (snapshot.empty) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">ไม่พบข้อมูลผู้ใช้งาน</td></tr>';
+            return;
+        }
+
+        // เรียงลำดับและอัปเดตยอดรวม
+        const docs = [];
+        snapshot.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
+        docs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+        const countBadge = document.getElementById('userCountBadge');
+        if (countBadge) countBadge.textContent = `ทั้งหมด ${docs.length} คน`;
+
+        docs.forEach(data => {
+            const id = data.id;
+            const row = document.createElement('tr');
+
+            // กำหนดสี Badge ตามตำแหน่ง
+            let posClass = 'pos-sub-member';
+            if (data.position === 'แอดมิน') posClass = 'pos-admin';
+            else if (data.position === 'ประธานกรรมการสภานักเรียน') posClass = 'pos-president';
+            else if (data.position && data.position.includes('รองประธาน')) posClass = 'pos-v-president';
+            else if (data.position === 'เลขานุการคณะกรรมการสภานักเรียน') posClass = 'pos-secretary';
+            else if (data.position === 'กรรมการสภานักเรียน') posClass = 'pos-member';
+
+            // ตัวอักษรตัวแรกของชื่อสำหรับ Avatar
+            const firstLetter = (data.displayName || '?').charAt(0).toUpperCase();
+
+            row.innerHTML = `
+                <td class="ps-4">
+                    <span class="student-id-label">${data.studentId || '-'}</span>
+                </td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="user-avatar-placeholder me-3">${firstLetter}</div>
+                        <div class="fw-bold text-dark">${data.displayName || '-'}</div>
+                    </div>
+                </td>
+                <td>
+                    <span class="pos-badge ${posClass}">
+                        <i class="bi bi-patch-check-fill"></i> ${data.position || '-'}
+                    </span>
+                </td>
+                <td><span class="text-muted small">${data.email || '-'}</span></td>
+                <td class="pe-4 text-center">
+                    <div class="manage-btn-group">
+                        <button class="btn btn-edit-user edit-user-btn shadow-sm" 
+                                data-id="${id}" title="แก้ไขข้อมูล">
+                            <i class="bi bi-pencil-fill"></i>
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm border-0 reset-password-btn shadow-sm" 
+                                data-id="${id}" data-studentid="${data.studentId}" data-name="${data.displayName}" data-pos="${data.position}"
+                                title="เปลี่ยนรหัสผ่านให้สมาชิก"
+                                style="background: #fff8e1; color: #ffa000; border-radius: 10px; width: 36px; height: 36px;">
+                            <i class="bi bi-key-fill"></i>
+                        </button>
+                        <button class="btn btn-delete-user delete-user-btn shadow-sm" 
+                                data-id="${id}" data-email="${data.email}" title="ลบผู้ใช้งาน"
+                                ${data.role === 'superadmin' ? 'disabled' : ''}>
+                            <i class="bi bi-trash3-fill"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+
+        // Add event listeners for edit buttons
+        document.querySelectorAll('.edit-user-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const uid = e.currentTarget.dataset.id;
+                handleEditUser(uid);
+            });
+        });
+
+        // Add event listeners for delete buttons
+        document.querySelectorAll('.delete-user-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const uid = e.currentTarget.dataset.id;
+                const email = e.currentTarget.dataset.email;
+                handleDeleteUser(uid, email);
+            });
+        });
+
+        // Add event listeners for reset password buttons
+        document.querySelectorAll('.reset-password-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const dataset = e.currentTarget.dataset;
+                handleForceResetPassword(dataset.id, dataset.studentid, dataset.name, dataset.pos);
+            });
+        });
+
+    } catch (error) {
+        console.error("Error loading users:", error);
+        tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-danger">เกิดข้อผิดพลาด: ${error.message}</td></tr>`;
+    }
+}
+
+async function handleAddUser() {
+    const { value: formValues } = await Swal.fire({
+        title: 'เพิ่มผู้ใช้งานใหม่',
+        html:
+            `<div class="text-start mb-3">
+                <label class="form-label">เลขประจำตัว 5 หลัก (Username)</label>
+                <input id="swal-input1" class="form-control mb-3" placeholder="เช่น 12345" maxlength="5">
+                
+                <label class="form-label">ชื่อ-นามสกุล</label>
+                <input id="swal-input2" class="form-control mb-3" placeholder="ระบุชื่อผู้ใช้งาน">
+                
+                <label class="form-label">รหัสผ่าน</label>
+                <input id="swal-input3" type="password" class="form-control mb-3" placeholder="กำหนดรหัสผ่าน">
+                
+                <label class="form-label">ตำแหน่ง</label>
+                <select id="swal-input4" class="form-select mb-3">
+                    ${POSITIONS.map(p => `<option value="${p}">${p}</option>`).join('')}
+                </select>
+            </div>`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'บันทึกข้อมูล',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#1b5e20',
+        preConfirm: () => {
+            const studentId = document.getElementById('swal-input1').value;
+            const displayName = document.getElementById('swal-input2').value;
+            const password = document.getElementById('swal-input3').value;
+            const position = document.getElementById('swal-input4').value;
+
+            if (!/^\d{5}$/.test(studentId)) {
+                Swal.showValidationMessage('กรุณากรอกเลขประจำตัว 5 หลักให้ถูกต้อง');
+                return false;
+            }
+            if (!displayName || !password) {
+                Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบถ้วน');
+                return false;
+            }
+            if (password.length < 6) {
+                Swal.showValidationMessage('รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+                return false;
+            }
+
+            return { studentId, displayName, password, position };
+        }
+    });
+
+    if (formValues) {
+        try {
+            Swal.fire({
+                title: 'กำลังบันทึกข้อมูล...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            // สร้าง Email จำลองสำหรับ Firebase Auth
+            const email = `${formValues.studentId}@council.internal`;
+
+            // ใช้ Secondary App Trick เพื่อสร้าง User โดยไม่หลุดจาก Session ปัจจุบัน
+            const secondaryApp = firebase.initializeApp(firebaseConfig, "secondary");
+            const secondaryAuth = secondaryApp.auth();
+
+            const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, formValues.password);
+            const uid = userCredential.user.uid;
+
+            // บันทึกลง Firestore
+            await db.collection("users").doc(uid).set({
+                studentId: formValues.studentId,
+                displayName: formValues.displayName,
+                email: email,
+                position: formValues.position,
+                role: formValues.position === 'แอดมิน' ? 'admin' : 'staff',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            // ลบ Secondary App
+            await secondaryApp.delete();
+
+            Swal.fire('สำเร็จ', 'เพิ่มผู้ใช้งานเรียบร้อยแล้ว', 'success');
+            loadUsersTable();
+
+        } catch (error) {
+            console.error("Error adding user:", error);
+            let msg = 'ไม่สามารถเพิ่มผู้ใช้งานได้';
+            if (error.code === 'auth/email-already-in-use') msg = 'เลขประจำตัวนี้มีอยู่ในระบบแล้ว';
+            Swal.fire('ผิดพลาด', msg + ' (' + error.message + ')', 'error');
+        }
+    }
+}
+
+async function handleDeleteUser(uid, email) {
+    const result = await Swal.fire({
+        title: 'ยืนยันการลบ?',
+        text: `คุณต้องการลบผู้ใช้งาน ${email} หรือไม่?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'ยืนยันการลบ',
+        cancelButtonText: 'ยกเลิก'
+    });
+
+    if (result.isConfirmed) {
+        try {
+            await db.collection("users").doc(uid).delete();
+            Swal.fire('สำเร็จ', 'ลบผู้ใช้งานเรียบร้อยแล้ว', 'success');
+            loadUsersTable();
+        } catch (error) {
+            console.error("Error deleting user:", error);
+            Swal.fire('ผิดพลาด', 'ไม่สามารถลบผู้ใช้งานได้', 'error');
+        }
+    }
+}
+
+// ===== ฟังก์ชันจัดการรหัสผ่าน =====
+
+async function handleChangeOwnPassword() {
+    const { value: formValues } = await Swal.fire({
+        title: 'เปลี่ยนรหัสผ่านใหม่',
+        html:
+            `<div class="text-start mb-3">
+                <label class="form-label">รหัสผ่านใหม่</label>
+                <input id="swal-new-password" type="password" class="form-control mb-3" placeholder="ระบุรหัสผ่านใหม่">
+                <label class="form-label">ยืนยันรหัสผ่านใหม่</label>
+                <input id="swal-confirm-password" type="password" class="form-control mb-3" placeholder="ระบุรหัสผ่านใหม่อีกครั้ง">
+                <small class="text-muted">หมายเหตุ: คุณอาจถูกให้ออกจากระบบและต้องล็อกอินใหม่เพื่อความปลอดภัย</small>
+            </div>`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'อัปเดตรหัสผ่าน',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#1b5e20',
+        preConfirm: () => {
+            const newPass = document.getElementById('swal-new-password').value;
+            const confirmPass = document.getElementById('swal-confirm-password').value;
+
+            if (!newPass || !confirmPass) {
+                Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบถ้วน');
+                return false;
+            }
+            if (newPass.length < 6) {
+                Swal.showValidationMessage('รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+                return false;
+            }
+            if (newPass !== confirmPass) {
+                Swal.showValidationMessage('รหัสผ่านไม่ตรงกัน');
+                return false;
+            }
+
+            return newPass;
+        }
+    });
+
+    if (formValues) {
+        try {
+            Swal.fire({
+                title: 'กำลังอัปเดตรหัสผ่าน...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            await currentUser.updatePassword(formValues);
+
+            await Swal.fire({
+                icon: 'success',
+                title: 'สำเร็จ',
+                text: 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว กรุณาเข้าสู่ระบบใหม่อีกครั้ง',
+                confirmButtonColor: '#1b5e20'
+            });
+
+            // ออกจากระบบเพื่อให้ล็อกอินใหม่ด้วยรหัสใหม่
+            handleAdminLogout();
+
+        } catch (error) {
+            console.error("Change password error:", error);
+            if (error.code === 'auth/requires-recent-login') {
+                Swal.fire('ความปลอดภัยสูง', 'กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่หนึ่งครั้ง ก่อนทำการเปลี่ยนรหัสผ่าน', 'info');
+            } else {
+                Swal.fire('ผิดพลาด', 'ไม่สามารถเปลี่ยนรหัสผ่านได้: ' + error.message, 'error');
+            }
+        }
+    }
+}
+
+async function handleForceResetPassword(uid, studentId, name, position) {
+    const result = await Swal.fire({
+        title: 'เปลี่ยนรหัสผ่านให้สมาชิก',
+        text: `เนื่องจากนโยบายความปลอดภัยของ Firebase แอดมินต้อง "ลบบัญชีเดิม" แล้วกด "เพิ่มใหม่ด้วยรหัสใหม่" ครับ (ระบบจะช่วยกรอกข้อมูลอัตโนมัติ)`,
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#1b5e20',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'ตกลง, เริ่มขั้นตอน',
+        cancelButtonText: 'ยกเลิก'
+    });
+
+    if (result.isConfirmed) {
+        // ขั้นตอนที่ 1: ลบผู้ใช้เดิม
+        const deleteConfirm = await Swal.fire({
+            title: 'ยืนยันการลบบัญชีเก่า?',
+            text: `คุณกำลังจะลบบัญชี ${name} เพื่อเตรียมสร้างใหม่ด้วยรหัสใหม่`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'ลบข้อมูลเดิม'
+        });
+
+        if (deleteConfirm.isConfirmed) {
+            try {
+                await db.collection("users").doc(uid).delete();
+
+                // ขั้นตอนที่ 2: เปิดหน้าต่างเพิ่มผู้ใช้ใหม่พร้อมกรอกข้อมูลเดิมให้
+                Swal.fire({
+                    title: 'กำลังเตรียมระบบ...',
+                    timer: 1000,
+                    didOpen: () => { Swal.showLoading(); }
+                }).then(() => {
+                    // เรียกฟังก์ชันเพิ่มผู้ใช้พร้อม Pre-fill ข้อมูล
+                    handleAddUserWithDefault(studentId, name, position);
+                });
+            } catch (error) {
+                Swal.fire('ผิดพลาด', 'ไม่สามารถลบข้อมูลได้: ' + error.message, 'error');
+            }
+        }
+    }
+}
+
+async function handleAddUserWithDefault(defaultId, defaultName, defaultPos) {
+    const { value: formValues } = await Swal.fire({
+        title: 'กำหนดรหัสผ่านใหม่',
+        html:
+            `<div class="text-start mb-3">
+                <p class="small text-muted mb-4">ระบบได้ดึงข้อมูลเดิมมาให้แล้ว กรุณากำหนดรหัสผ่านใหม่ที่ต้องการ</p>
+                <label class="form-label">เลขประจำตัว 5 หลัก</label>
+                <input id="swal-input1" class="form-control mb-3 bg-light" value="${defaultId}" readonly>
+                
+                <label class="form-label">ชื่อ-นามสกุล</label>
+                <input id="swal-input2" class="form-control mb-3" value="${defaultName}" placeholder="ระบุชื่อผู้ใช้งาน">
+                
+                <label class="form-label">รหัสผ่านใหม่</label>
+                <input id="swal-input3" type="password" class="form-control mb-3" placeholder="ระบุรหัสผ่านใหม่ที่ต้องการ">
+                
+                <label class="form-label">ตำแหน่ง</label>
+                <select id="swal-input4" class="form-select mb-3">
+                    ${POSITIONS.map(p => `<option value="${p}" ${p === defaultPos ? 'selected' : ''}>${p}</option>`).join('')}
+                </select>
+            </div>`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'บันทึกรหัสผ่านใหม่',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#1b5e20',
+        preConfirm: () => {
+            const studentId = document.getElementById('swal-input1').value;
+            const displayName = document.getElementById('swal-input2').value;
+            const password = document.getElementById('swal-input3').value;
+            const position = document.getElementById('swal-input4').value;
+
+            if (!password || password.length < 6) {
+                Swal.showValidationMessage('กรุณากำหนดรหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)');
+                return false;
+            }
+
+            return { studentId, displayName, password, position };
+        }
+    });
+
+    if (formValues) {
+        // ใช้ตรรกะเดียวกับ handleAddUser
+        try {
+            Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+            const email = `${formValues.studentId}@council.internal`;
+            const secondaryApp = firebase.initializeApp(firebaseConfig, "secondary-reset-" + Date.now());
+            const secondaryAuth = secondaryApp.auth();
+            const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, formValues.password);
+            const uid = userCredential.user.uid;
+            await db.collection("users").doc(uid).set({
+                studentId: formValues.studentId,
+                displayName: formValues.displayName,
+                email: email,
+                position: formValues.position,
+                role: formValues.position === 'แอดมิน' ? 'admin' : 'staff',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            await secondaryApp.delete();
+            Swal.fire('สำเร็จ', 'เปลี่ยนรหัสผ่านให้สมาชิกเรียบร้อยแล้ว', 'success');
+            loadUsersTable();
+        } catch (error) {
+            Swal.fire('ผิดพลาด', 'ไม่สามารถสร้างบัญชีใหม่ได้: ' + error.message, 'error');
+        }
+    } else {
+        // ถ้ากดยกเลิกกลางคัน ให้โหลดตารางใหม่ (ข้อมูล Firestore เดิมถูกลบไปแล้วแต่ใน Auth อาจยังอยู่ถ้าเกิด Error)
+        loadUsersTable();
+    }
+}
+
+async function handleSendResetLink(email) {
+    // ฟังก์ชันเดิมสำรองไว้สำหรับคนที่มีอีเมลจริง
+    try {
+        await auth.sendPasswordResetEmail(email);
+        Swal.fire('สำเร็จ', `ระบบได้ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ ${email} เรียบร้อยแล้ว`, 'success');
+    } catch (error) {
+        Swal.fire('ผิดพลาด', error.message, 'error');
+    }
+}
+
+
+
+async function handleEditUser(uid) {
+    try {
+        const userDoc = await db.collection("users").doc(uid).get();
+        if (!userDoc.exists) return;
+        const userData = userDoc.data();
+
+        const { value: formValues } = await Swal.fire({
+            title: 'แก้ไขข้อมูลผู้ใช้งาน',
+            html:
+                `<div class="text-start mb-3">
+                    <label class="form-label">เลขประจำตัว 5 หลัก (ไม่สามารถแก้ไขได้)</label>
+                    <input id="swal-edit-input1" class="form-control mb-3 bg-light" value="${userData.studentId || ''}" readonly>
+                    
+                    <label class="form-label">ชื่อ-นามสกุล</label>
+                    <input id="swal-edit-input2" class="form-control mb-3" value="${userData.displayName || ''}" placeholder="ระบุชื่อผู้ใช้งาน">
+                    
+                    <label class="form-label">ตำแหน่ง</label>
+                    <select id="swal-edit-input3" class="form-select mb-3">
+                        ${POSITIONS.map(p => `<option value="${p}" ${userData.position === p ? 'selected' : ''}>${p}</option>`).join('')}
+                    </select>
+                    <small class="text-muted">หมายเหตุ: หากต้องการเปลี่ยนรหัสผ่าน กรุณาลบและเพิ่มผู้ใช้ใหม่</small>
+                </div>`,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'บันทึกการแก้ไข',
+            cancelButtonText: 'ยกเลิก',
+            confirmButtonColor: '#1b5e20',
+            preConfirm: () => {
+                const displayName = document.getElementById('swal-edit-input2').value;
+                const position = document.getElementById('swal-edit-input3').value;
+
+                if (!displayName) {
+                    Swal.showValidationMessage('กรุณากรอกชื่อ-นามสกุล');
+                    return false;
+                }
+
+                return { displayName, position };
+            }
+        });
+
+        if (formValues) {
+            Swal.fire({
+                title: 'กำลังบันทึกการแก้ไข...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            await db.collection("users").doc(uid).update({
+                displayName: formValues.displayName,
+                position: formValues.position,
+                role: formValues.position === 'แอดมิน' ? 'admin' : 'staff',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            Swal.fire('สำเร็จ', 'แก้ไขข้อมูลเรียบร้อยแล้ว', 'success');
+            loadUsersTable();
+        }
+    } catch (error) {
+        console.error("Error editing user:", error);
+        Swal.fire('ผิดพลาด', 'ไม่สามารถแก้ไขข้อมูลได้', 'error');
+    }
+}
+// ===== ฟังก์ชันแสดงผลปฏิทินสรุปรายวัน =====
+function renderComplaintCalendar(dailyCounts) {
+    const calendarGrid = document.getElementById('calendarGrid');
+    if (!calendarGrid) return;
+
+    const now = new Date();
+    const year = calendarSelectedYear;
+    const month = calendarSelectedMonth;
+
+    // หาจำนวนวันในเดือนและวันแรกของเดือน
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    calendarGrid.innerHTML = '';
+
+    // วันว่างช่วงต้นเดือน (เพื่อให้วันที่ 1 ตรงตามวันจริง)
+    for (let i = 0; i < firstDay; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'calendar-day empty';
+        calendarGrid.appendChild(emptyCell);
+    }
+
+    // สร้างวันที่ 1 จนถึงวันสุดท้ายของเดือน
+    for (let day = 1; day <= daysInMonth; day++) {
+        const count = dailyCounts[day] || 0;
+        const dayCell = document.createElement('div');
+        dayCell.className = 'calendar-day';
+
+        if (day === now.getDate() && month === now.getMonth() && year === now.getFullYear()) {
+            dayCell.classList.add('today');
+        }
+
+        if (count > 0) {
+            dayCell.classList.add('has-data');
+            // ถ้ามีการร้องเรียนเยอะ (มากกว่า 5 เรื่อง) ให้ใช้สีแดงแจ้งเตือน
+            if (count > 5) dayCell.classList.add('has-data-high');
+
+            // ทำให้กดดูรายละเอียดได้
+            dayCell.style.cursor = 'pointer';
+            dayCell.addEventListener('click', () => showDailyDetails(day, month, year));
+        }
+
+        dayCell.innerHTML = `
+            <div class="day-number">${day}</div>
+            <div class="complaint-count-wrapper">
+                <span class="complaint-count-badge" title="${count} เรื่อง">${count}</span>
+            </div>
+        `;
+        calendarGrid.appendChild(dayCell);
+    }
+}
+
+async function showDailyDetails(day, month, year) {
+    const months = [
+        "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+        "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+    ];
+
+    const dateStr = `${day} ${months[month]} ${year + 543}`;
+
+    Swal.fire({
+        title: `รายการร้องเรียนวันที่ ${dateStr}`,
+        html: '<div id="dailyComplaintsList" class="text-start" style="max-height: 60vh; overflow-y: auto; padding: 10px;"><div class="text-center py-5"><div class="spinner-border text-success" role="status"></div><p class="mt-2 text-muted">กำลังโหลดข้อมูล...</p></div></div>',
+        width: '700px',
+        showConfirmButton: false,
+        showCloseButton: true,
+        background: '#f8fafc',
+        customClass: {
+            container: 'premium-swal-container',
+            title: 'fw-bold text-success pt-4'
+        }
+    });
+
+    try {
+        const startOfDay = new Date(year, month, day);
+        const endOfDay = new Date(year, month, day, 23, 59, 59);
+
+        const snapshot = await complaintsCollection
+            .where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(startOfDay))
+            .where('createdAt', '<=', firebase.firestore.Timestamp.fromDate(endOfDay))
+            .get();
+
+        const listEl = document.getElementById('dailyComplaintsList');
+        if (snapshot.empty) {
+            listEl.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="bi bi-clipboard-x text-muted" style="font-size: 3rem;"></i>
+                    <p class="mt-3 text-muted">ไม่พบข้อมูลการร้องเรียนในวันนี้</p>
+                </div>`;
+            return;
+        }
+
+        let html = '';
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const docId = doc.id;
+
+            // กำหนดสีสถานะแบบเดียวกับตารางหลัก
+            let statusClass = 'status-waiting';
+            if (data.status === 'accepted') statusClass = 'status-accepted';
+            else if (data.status === 'in-progress') statusClass = 'status-in-progress';
+            else if (data.status === 'resolved') statusClass = 'status-resolved';
+            else if (data.status === 'rejected') statusClass = 'status-rejected';
+
+            html += `
+                <div class="daily-complaint-item animate__animated animate__fadeInUp">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="daily-ticket-badge">#${data.ticketId}</span>
+                        <span class="status-badge status-${data.status || 'pending'} shadow-sm" style="font-size: 0.75rem; padding: 6px 14px;">
+                             ${getStatusText(data.status)}
+                        </span>
+                    </div>
+                    <div class="daily-title">${data.title}</div>
+                    <div class="daily-desc">${data.description ? (data.description.length > 150 ? data.description.substring(0, 150) + '...' : data.description) : 'ไม่มีรายละเอียดเพิ่มเติม'}</div>
+                    <div class="daily-meta-grid">
+                        <div class="daily-meta-item">
+                            <i class="bi bi-folder-fill"></i>
+                            <span>${data.category}</span>
+                        </div>
+                        <div class="daily-meta-item">
+                            <i class="bi bi-person-fill"></i>
+                            <span>${data.reporterName || 'ไม่ระบุตัวตน'}</span>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <button class="btn daily-manage-link" onclick="handleViewDetails('${docId}')">
+                            <i class="bi bi-pencil-square"></i> ดูและจัดการเรื่องนี้
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        listEl.innerHTML = html;
+
+    } catch (error) {
+        console.error("Error fetching daily details:", error);
+        document.getElementById('dailyComplaintsList').innerHTML =
+            '<div class="alert alert-danger shadow-sm rounded-4">เกิดข้อผิดพลาดในการโหลดข้อมูล: ' + error.message + '</div>';
+    }
+}
+
+// ===== ฟังก์ชันจัดการตัวเลือกปฏิทิน =====
+function initCalendarSelectors() {
+    const monthSelect = document.getElementById('calendarMonthSelect');
+    const yearSelect = document.getElementById('calendarYearSelect');
+    const todayBtn = document.getElementById('calendarTodayBtn');
+
+    if (!monthSelect || !yearSelect) return;
+
+    // เติมรายชื่อเดือน
+    const months = [
+        "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+        "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+    ];
+
+    months.forEach((m, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = m;
+        opt.selected = i === calendarSelectedMonth;
+        monthSelect.appendChild(opt);
+    });
+
+    // เติมปี (2569 - 2570)
+    for (let y = 2026; y <= 2027; y++) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y + 543; // พ.ศ.
+        opt.selected = y === calendarSelectedYear;
+        yearSelect.appendChild(opt);
+    }
+
+    // Event Listeners
+    monthSelect.addEventListener('change', (e) => {
+        calendarSelectedMonth = parseInt(e.target.value);
+        loadStatistics(); // รีโหลดสถิติเพื่อคำนวณ dailyCounts ใหม่
+    });
+
+    yearSelect.addEventListener('change', (e) => {
+        calendarSelectedYear = parseInt(e.target.value);
+        loadStatistics();
+    });
+
+    if (todayBtn) {
+        todayBtn.addEventListener('click', () => {
+            const now = new Date();
+            calendarSelectedMonth = now.getMonth();
+            calendarSelectedYear = now.getFullYear();
+
+            monthSelect.value = calendarSelectedMonth;
+            yearSelect.value = calendarSelectedYear;
+
+            loadStatistics();
+        });
+    }
+}
