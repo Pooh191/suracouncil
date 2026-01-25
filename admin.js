@@ -285,13 +285,23 @@ async function loadStatistics() {
         // ดึงข้อมูลทั้งหมด
         const snapshot = await complaintsCollection.get();
 
-        // คำนวณสถิติ
+        // คำนวณสถิติสถานะ
         let total = 0;
         let waiting = 0;
         let accepted = 0;
         let rejected = 0;
         let inProgress = 0;
         let resolved = 0;
+
+        // คำนวณสถิติตามเวลา (รายวัน, รายสัปดาห์, รายเดือน)
+        let todayCount = 0;
+        let weekCount = 0;
+        let monthCount = 0;
+
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+        const sevenDaysAgo = now.getTime() - (7 * 24 * 60 * 60 * 1000);
 
         // สำหรับกราฟหมวดหมู่
         const categoryCounts = {
@@ -313,7 +323,6 @@ async function loadStatistics() {
 
         // สำหรับกราฟเทรนด์ (6 เดือนล่าสุด)
         const monthlyTrend = {};
-        const now = new Date();
         for (let i = 5; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
             const monthKey = d.toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
@@ -327,6 +336,22 @@ async function loadStatistics() {
         snapshot.forEach(doc => {
             const data = doc.data();
             total++;
+
+            // ตรวจสอบเวลาเพื่อจัดกลุ่มสถิติรายเวลา
+            if (data.createdAt) {
+                const createdAt = data.createdAt.toDate();
+                const createdTime = createdAt.getTime();
+
+                if (createdTime >= todayStart) todayCount++;
+                if (createdTime >= sevenDaysAgo) weekCount++;
+                if (createdTime >= thisMonthStart) monthCount++;
+
+                // นับเทรนด์รายเดือนสำหรับกราฟ
+                const monthKey = createdAt.toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
+                if (monthlyTrend.hasOwnProperty(monthKey)) {
+                    monthlyTrend[monthKey]++;
+                }
+            }
 
             // นับสถานะ
             switch (data.status) {
@@ -360,7 +385,6 @@ async function loadStatistics() {
             if (data.category && categoryCounts.hasOwnProperty(data.category)) {
                 categoryCounts[data.category]++;
             } else if (data.category) {
-                // เช็คกรณี "อื่นๆ (...)"
                 if (data.category.startsWith('อื่นๆ')) {
                     categoryCounts['อื่นๆ']++;
                 }
@@ -374,15 +398,6 @@ async function loadStatistics() {
                     reporterCounts[type]++;
                 } else {
                     reporterCounts['อื่นๆ']++;
-                }
-            }
-
-            // นับเทรนด์รายเดือน
-            if (data.createdAt) {
-                const date = data.createdAt.toDate();
-                const monthKey = date.toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
-                if (monthlyTrend.hasOwnProperty(monthKey)) {
-                    monthlyTrend[monthKey]++;
                 }
             }
         });
@@ -400,9 +415,60 @@ async function loadStatistics() {
             avgTimeBox.textContent = 'ไม่มีข้อมูล';
         }
 
-        // สร้างการ์ดสถิติ
+        // สร้างการ์ดสถิติ (อัปเกรดใหม่ แบ่งโซน)
         const statsCards = document.getElementById('statsCards');
         statsCards.innerHTML = `
+            <!-- สรุปรายเวลา (Daily/Weekly/Monthly) -->
+            <div class="col-12 mb-3">
+                <div class="d-flex align-items-center mb-3">
+                    <span class="premium-title-vbar me-3" style="height: 20px; background: var(--accent-yellow);"></span>
+                    <h6 class="mb-0 fw-bold">สรุปสถิติรายเวลา (New Reports Summary)</h6>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="card stat-card shadow-sm border-0" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white;">
+                            <div class="card-body p-3 d-flex align-items-center">
+                                <div class="stat-icon-bg me-3"><i class="bi bi-calendar-day"></i></div>
+                                <div>
+                                    <h6 class="text-white-50 mb-0 small">เรื่องใหม่วันนี้</h6>
+                                    <h3 class="fw-bold mb-0">${todayCount} <small class="fs-6 fw-normal">เรื่อง</small></h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card stat-card shadow-sm border-0" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white;">
+                            <div class="card-body p-3 d-flex align-items-center">
+                                <div class="stat-icon-bg me-3"><i class="bi bi-calendar-week"></i></div>
+                                <div>
+                                    <h6 class="text-white-50 mb-0 small">เรื่องใหม่สัปดาห์นี้ (7 วัน)</h6>
+                                    <h3 class="fw-bold mb-0">${weekCount} <small class="fs-6 fw-normal">เรื่อง</small></h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card stat-card shadow-sm border-0" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white;">
+                            <div class="card-body p-3 d-flex align-items-center">
+                                <div class="stat-icon-bg me-3"><i class="bi bi-calendar-month"></i></div>
+                                <div>
+                                    <h6 class="text-white-50 mb-0 small">เรื่องใหม่เดือนนี้</h6>
+                                    <h3 class="fw-bold mb-0">${monthCount} <small class="fs-6 fw-normal">เรื่อง</small></h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- สรุปตามสถานะ -->
+            <div class="col-12 mt-4 mb-2">
+                <div class="d-flex align-items-center mb-3">
+                    <span class="premium-title-vbar me-3" style="height: 20px;"></span>
+                    <h6 class="mb-0 fw-bold">สถานะการดำเนินงานทั้งหมด (Work Status)</h6>
+                </div>
+            </div>
+
             <div class="col-lg-2 col-md-4 col-6 mb-3">
                 <div class="card stat-card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white;">
                     <div class="card-body p-3">
@@ -437,7 +503,7 @@ async function loadStatistics() {
             </div>
 
             <div class="col-lg-2 col-md-4 col-6 mb-3">
-                <div class="card stat-card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white;">
+                <div class="card stat-card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%); color: white;">
                     <div class="card-body p-3">
                         <div class="text-center">
                             <h6 class="text-white-50 mb-1 small">ดำเนินการ</h6>
