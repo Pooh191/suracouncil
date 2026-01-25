@@ -194,6 +194,67 @@ function setupEventListeners() {
 async function handleComplaintSubmit(e) {
     e.preventDefault();
 
+    // แสดง Popup ยืนยันการยินยอมข้อมูลส่วนบุคคล
+    const confirmResult = await Swal.fire({
+        title: '📋 ยืนยันการส่งคำร้องเรียน',
+        html: `
+            <div style="text-align: left; padding: 20px;">
+                <div style="background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%); padding: 20px; border-radius: 15px; margin-bottom: 20px; color: white; text-align: center;">
+                    <i class="bi bi-shield-check" style="font-size: 3rem; margin-bottom: 10px;"></i>
+                    <h5 style="color: white; margin: 0;">นโยบายความเป็นส่วนตัว</h5>
+                </div>
+                
+                <div style="background: #f0fdf4; padding: 15px; border-radius: 10px; border-left: 4px solid #16a34a; margin-bottom: 15px;">
+                    <p style="margin: 0; color: #166534; font-weight: 600;">
+                        <i class="bi bi-check-circle-fill" style="color: #16a34a;"></i> 
+                        ท่านยอมรับให้ข้อมูลส่วนบุคคลของท่าน
+                    </p>
+                </div>
+
+                <div style="background: #fff9c4; padding: 15px; border-radius: 10px; border-left: 4px solid #fdd835; margin-bottom: 15px;">
+                    <p style="margin: 0; color: #854d0e; font-weight: 500;">
+                        <i class="bi bi-lock-fill" style="color: #fdd835;"></i> 
+                        ทางสภานักเรียนโรงเรียนสุรวิทยาคารจะเก็บข้อมูลไว้เป็นความลับ
+                    </p>
+                </div>
+
+                <div style="background: #e0f2fe; padding: 15px; border-radius: 10px; border-left: 4px solid #0ea5e9;">
+                    <p style="margin: 0; color: #075985; font-weight: 500;">
+                        <i class="bi bi-info-circle-fill" style="color: #0ea5e9;"></i> 
+                        ข้อมูลจะถูกใช้เพื่อการดำเนินการแก้ไขปัญหาเท่านั้น
+                    </p>
+                </div>
+
+                <p style="margin-top: 20px; color: #64748b; font-size: 0.9rem; text-align: center;">
+                    กรุณายืนยันว่าท่านได้อ่านและเข้าใจนโยบายความเป็นส่วนตัวแล้ว
+                </p>
+            </div>
+        `,
+        icon: null,
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-check-circle me-2"></i>ยืนยันและส่งคำร้องเรียน',
+        cancelButtonText: '<i class="bi bi-x-circle me-2"></i>ยกเลิก',
+        confirmButtonColor: '#1b5e20',
+        cancelButtonColor: '#64748b',
+        width: '600px',
+        customClass: {
+            popup: 'swal-custom-popup',
+            confirmButton: 'swal-custom-confirm',
+            cancelButton: 'swal-custom-cancel'
+        },
+        showClass: {
+            popup: 'animate__animated animate__fadeInDown animate__faster'
+        },
+        hideClass: {
+            popup: 'animate__animated animate__fadeOutUp animate__faster'
+        }
+    });
+
+    // ถ้าผู้ใช้กดยกเลิก ให้หยุดการทำงาน
+    if (!confirmResult.isConfirmed) {
+        return;
+    }
+
     // Disable ปุ่ม submit
     const submitBtn = e.target.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
@@ -411,16 +472,22 @@ function removeImage(index, btn) {
     });
 }
 
-// ===== ฟังก์ชันสร้าง Ticket ID (แบบรันเลข SN - 0001 พร้อมเติมช่องว่างที่หายไป) =====
+// ===== ฟังก์ชันสร้าง Ticket ID (รูปแบบ: SN-NNNNMM) =====
+// SN = สภานักเรียน
+// NNNN = เลขที่รันต่อเนื่อง (0001, 0002, ...)
+// MM = นาทีที่ส่งข้อมูล (00-59)
 async function generateTicketId() {
     try {
         const snapshot = await complaintsCollection.get();
         const existingNums = [];
 
+        // ดึงเลขที่รันจาก Ticket ID ทั้งหมด
         snapshot.forEach(doc => {
             const tid = doc.data().ticketId;
             if (tid && tid.startsWith("SN-")) {
-                const num = parseInt(tid.replace("SN-", ""));
+                // ตัด SN- ออก แล้วเอาแค่ 4 หลักแรก (เลขที่รัน)
+                const numPart = tid.replace("SN-", "").substring(0, 4);
+                const num = parseInt(numPart);
                 if (!isNaN(num)) existingNums.push(num);
             }
         });
@@ -439,14 +506,21 @@ async function generateTicketId() {
             }
         }
 
+        // ดึงนาทีปัจจุบัน
+        const now = new Date();
+        const minute = now.getMinutes().toString().padStart(2, '0');
+
+        // สร้าง Ticket ID
         const prefix = "SN-";
-        const formattedNum = nextNum.toString().padStart(4, '0'); // รันเลข 4 หลัก เช่น 0001
-        return prefix + formattedNum;
+        const formattedNum = nextNum.toString().padStart(4, '0'); // เลขที่รัน 4 หลัก
+        return prefix + formattedNum + minute; // SN-NNNNMM
 
     } catch (error) {
         console.error("Error generating Ticket ID:", error);
         // Fallback กรณีเกิดข้อผิดพลาด
-        return "SN - " + Math.floor(1000 + Math.random() * 9000);
+        const now = new Date();
+        const minute = now.getMinutes().toString().padStart(2, '0');
+        return "SN-" + Math.floor(1000 + Math.random() * 9000) + minute;
     }
 }
 
@@ -454,7 +528,7 @@ async function generateTicketId() {
 async function generateSampleTicketId() {
     const ticketIdInput = document.getElementById('ticketId');
     if (ticketIdInput) {
-        ticketIdInput.placeholder = "เช่น: SN-0000";
+        ticketIdInput.placeholder = "เช่น: SN-000125";
     }
 }
 
