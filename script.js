@@ -9,6 +9,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ตั้งค่า Event Listeners
     setupEventListeners();
+
+    // สุ่ม Ticket ID สำหรับการแสดงตัวอย่าง
+    generateSampleTicketId();
+
+    // แสดง Developer Announcement Popup
+    showDeveloperAnnouncement();
 });
 
 // ===== ตั้งค่า Event Listeners =====
@@ -25,8 +31,15 @@ function setupEventListeners() {
         trackBtn.addEventListener('click', handleTrackStatus);
     }
 
-    // ฟังก์ชันเมื่อกด Enter ในช่องค้นหา (ถ้ามี)
-    // สำหรับระบบใหม่ที่เลือกจาก dropdown ไม่จำเป็นต้องใช้ Enter แต่เก็บโครงสร้างไว้เผื่อขยายผล
+    // ฟังก์ชันเมื่อกด Enter ในช่อง Ticket ID
+    const ticketIdInput = document.getElementById('ticketId');
+    if (ticketIdInput) {
+        ticketIdInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                handleTrackStatus();
+            }
+        });
+    }
 
     // แสดงตัวอย่างรูปภาพเมื่อเลือกไฟล์ (หลายรูป)
     const imageUpload = document.getElementById('imageUpload');
@@ -36,29 +49,19 @@ function setupEventListeners() {
         imageUpload.addEventListener('change', function () {
             const files = Array.from(this.files);
 
-            // ตรวจสอบจำนวนไฟล์ (จำกัด 8 รูป)
-            if (files.length + selectedFiles.length > 8) {
-                Swal.fire({
-                    title: 'เกินขีดจำกัด!',
-                    text: 'สามารถเลือกรูปภาพได้ไม่เกิน 8 รูปครับ',
-                    icon: 'warning',
-                    confirmButtonColor: '#1b5e20'
-                });
+            // ตรวจสอบจำนวนรูป (จำกัด 3 รูป)
+            if (files.length + selectedFiles.length > 3) {
+                alert("สามารถเลือกรูปภาพได้ไม่เกิน 3 รูปครับ");
                 this.value = '';
                 return;
             }
 
-            // ตรวจสอบขนาดรวม (จำกัด 10MB)
+            // ตรวจสอบขนาดรวม (จำกัด 5MB)
             const totalSize = files.reduce((acc, file) => acc + file.size, 0);
             const existingSize = selectedFiles.reduce((acc, file) => acc + file.size, 0);
 
-            if ((totalSize + existingSize) > 10 * 1024 * 1024) {
-                Swal.fire({
-                    title: 'ไฟล์ใหญ่เกินไป!',
-                    text: 'ขนาดไฟล์รวมกันต้องไม่เกิน 10MB ครับ',
-                    icon: 'warning',
-                    confirmButtonColor: '#1b5e20'
-                });
+            if ((totalSize + existingSize) > 5 * 1024 * 1024) {
+                alert("ขนาดไฟล์รวมกันต้องไม่เกิน 5MB ครับ");
                 this.value = '';
                 return;
             }
@@ -92,7 +95,27 @@ function setupEventListeners() {
         });
     }
 
-    // จัดการตัวเลือกไม่ระบุตัวตน (เอาออก)
+    // จัดการตัวเลือกไม่ระบุตัวตน
+    const anonymousCheckbox = document.getElementById('anonymous');
+    const reporterNameGroup = document.getElementById('reporterNameGroup');
+    const reporterNameInput = document.getElementById('reporterName');
+
+    if (anonymousCheckbox) {
+        anonymousCheckbox.addEventListener('change', function () {
+            if (this.checked) {
+                reporterNameGroup.style.opacity = '0.5';
+                reporterNameInput.disabled = true;
+                reporterNameInput.value = '';
+                reporterNameInput.required = false;
+            } else {
+                reporterNameGroup.style.opacity = '1';
+                reporterNameInput.disabled = false;
+                reporterNameInput.required = true;
+                reporterNameInput.focus();
+            }
+        });
+    }
+
     // ===== Cookie Consent Logic =====
     const cookieConsent = document.getElementById('cookieConsent');
     const acceptCookies = document.getElementById('acceptCookies');
@@ -115,7 +138,18 @@ function setupEventListeners() {
         });
     }
 
-
+    // ตั้งค่า Flatpickr แทน Date Picker เดิม
+    const incidentDateInput = document.getElementById('incidentDate');
+    if (incidentDateInput) {
+        flatpickr(incidentDateInput, {
+            locale: "th",
+            dateFormat: "Y-m-d",
+            defaultDate: "today",
+            altInput: true,
+            altFormat: "j F Y",
+            disableMobile: "true"
+        });
+    }
 
     // จัดการการเลือกหมวดหมู่ "อื่นๆ"
     const categorySelect = document.getElementById('category');
@@ -160,6 +194,67 @@ function setupEventListeners() {
 async function handleComplaintSubmit(e) {
     e.preventDefault();
 
+    // แสดง Popup ยืนยันการยินยอมข้อมูลส่วนบุคคล
+    const confirmResult = await Swal.fire({
+        title: '📋 ยืนยันการส่งคำร้องเรียน',
+        html: `
+            <div style="text-align: left; padding: 20px;">
+                <div style="background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%); padding: 20px; border-radius: 15px; margin-bottom: 20px; color: white; text-align: center;">
+                    <i class="bi bi-shield-check" style="font-size: 3rem; margin-bottom: 10px;"></i>
+                    <h5 style="color: white; margin: 0;">นโยบายความเป็นส่วนตัว</h5>
+                </div>
+                
+                <div style="background: #f0fdf4; padding: 15px; border-radius: 10px; border-left: 4px solid #16a34a; margin-bottom: 15px;">
+                    <p style="margin: 0; color: #166534; font-weight: 600;">
+                        <i class="bi bi-check-circle-fill" style="color: #16a34a;"></i> 
+                        ท่านยอมรับให้ข้อมูลส่วนบุคคลของท่าน
+                    </p>
+                </div>
+
+                <div style="background: #fff9c4; padding: 15px; border-radius: 10px; border-left: 4px solid #fdd835; margin-bottom: 15px;">
+                    <p style="margin: 0; color: #854d0e; font-weight: 500;">
+                        <i class="bi bi-lock-fill" style="color: #fdd835;"></i> 
+                        ทางสภานักเรียนโรงเรียนสุรวิทยาคารจะเก็บข้อมูลไว้เป็นความลับ
+                    </p>
+                </div>
+
+                <div style="background: #e0f2fe; padding: 15px; border-radius: 10px; border-left: 4px solid #0ea5e9;">
+                    <p style="margin: 0; color: #075985; font-weight: 500;">
+                        <i class="bi bi-info-circle-fill" style="color: #0ea5e9;"></i> 
+                        ข้อมูลจะถูกใช้เพื่อการดำเนินการแก้ไขปัญหาเท่านั้น
+                    </p>
+                </div>
+
+                <p style="margin-top: 20px; color: #64748b; font-size: 0.9rem; text-align: center;">
+                    กรุณายืนยันว่าท่านได้อ่านและเข้าใจนโยบายความเป็นส่วนตัวแล้ว
+                </p>
+            </div>
+        `,
+        icon: null,
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-check-circle me-2"></i>ยืนยันและส่งคำร้องเรียน',
+        cancelButtonText: '<i class="bi bi-x-circle me-2"></i>ยกเลิก',
+        confirmButtonColor: '#1b5e20',
+        cancelButtonColor: '#64748b',
+        width: '600px',
+        customClass: {
+            popup: 'swal-custom-popup',
+            confirmButton: 'swal-custom-confirm',
+            cancelButton: 'swal-custom-cancel'
+        },
+        showClass: {
+            popup: 'animate__animated animate__fadeInDown animate__faster'
+        },
+        hideClass: {
+            popup: 'animate__animated animate__fadeOutUp animate__faster'
+        }
+    });
+
+    // ถ้าผู้ใช้กดยกเลิก ให้หยุดการทำงาน
+    if (!confirmResult.isConfirmed) {
+        return;
+    }
+
     // Disable ปุ่ม submit
     const submitBtn = e.target.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
@@ -168,8 +263,10 @@ async function handleComplaintSubmit(e) {
 
     try {
         // เก็บค่าจากฟอร์ม
+        const isAnonymous = document.getElementById('anonymous').checked;
+        const reporterName = isAnonymous ? "ไม่ระบุตัวตน" : document.getElementById('reporterName').value;
         const reporterEmail = document.getElementById('reporterEmail').value;
-        const ticketId = "SN-" + Date.now().toString().slice(-6); // สร้าง ID ภายในสำหรับการอ้างอิง ระบบจะไม่โชว์ให้ user อีกแล้ว
+        const ticketId = await generateTicketId();
 
         let finalCategory = document.getElementById('category').value;
         if (finalCategory === 'อื่นๆ') {
@@ -181,42 +278,62 @@ async function handleComplaintSubmit(e) {
             finalReporterType = `อื่นๆ (${document.getElementById('otherReporterType').value})`;
         }
         const complaintData = {
+            title: document.getElementById('title').value,
             category: finalCategory,
-            roomNumber: document.getElementById('roomNumber').value,
             reporterType: finalReporterType,
+            location: document.getElementById('location').value,
+            incidentDate: document.getElementById('incidentDate').value,
             details: document.getElementById('details').value,
+            anonymous: isAnonymous,
+            reporterName: reporterName,
             reporterEmail: reporterEmail,
             status: "waiting",
             createdAt: timestamp(),
             updatedAt: timestamp(),
             ticketId: ticketId,
             privacyConsent: document.getElementById('privacyConsent').checked,
-            imageUrls: [],
-            activities: [
+            imageUrls: [], // เปลี่ยนเป็น array เพื่อเก็บหลายรูป
+            activities: [ // เริ่มต้นประวัติการแก้ไข
                 {
-                    action: "ส่งผลงานเข้าประกวด",
+                    action: "สร้างคำร้องเรียน",
                     status: "waiting",
                     timestamp: new Date(),
-                    details: "ตัวแทนห้องส่งข้อมูลความสะอาดเข้าสู่ระบบ"
+                    details: "นักเรียนส่งเรื่องเข้าสู่ระบบ"
                 }
             ],
-            isDuplicate: false,
+            isDuplicate: false, // ระบบจัดการเรื่องซ้ำ
             duplicateOf: null
         };
 
         // ===== ตรวจสอบเรื่องซ้ำอัตโนมัติ (Duplicate Detection) =====
-        // ต้องเป็นห้องเดียวกัน (Room SAME) และ ระดับชั้นเดียวกัน (Category SAME)
+        // ปรับปรุงเกณฑ์การตรวจสอบ: หมวดหมู่ + สถานที่ + (หัวข้อ หรือ รายละเอียด)
         const duplicateSnapshot = await complaintsCollection
             .where("category", "==", finalCategory)
-            .where("roomNumber", "==", complaintData.roomNumber)
-            .where("status", "in", ["waiting", "pending", "accepted", "in-progress"]) // เช็คเฉพาะที่ยังไม่เสร็จ
+            .where("location", "==", complaintData.location)
             .get();
 
-        if (!duplicateSnapshot.empty) {
+        // ค้นหาเรื่องที่อาจจะเป็นเรื่องซ้ำ (เฉพาะที่ยังอยู่ระหว่างดำเนินการ หรือถูกปฏิเสธไปก่อนหน้า)
+        const activeDuplicate = duplicateSnapshot.docs.find(doc => {
+            const d = doc.data();
+            const status = d.status;
+
+            // ถ้าสถานะเดิมคือ 'เสร็จสิ้น' (resolved) จะอนุญาตให้แจ้งใหม่ได้ทันที (เพราะปัญหาเดิมอาจกลับมาเกิดซ้ำ)
+            if (status === 'resolved') return false;
+
+            // ตรวจสอบความคล้ายคลึงของหัวข้อหรือรายละเอียด (สำหรับสถานะอื่นๆ เช่น waiting, accepted, in-progress, rejected)
+            const isTitleSimilar = d.title && d.title.trim().toLowerCase() === complaintData.title.trim().toLowerCase();
+            const isDetailsSimilar = d.details && d.details.trim().toLowerCase() === complaintData.details.trim().toLowerCase();
+
+            return isTitleSimilar || isDetailsSimilar;
+        });
+
+        if (activeDuplicate) {
+            const existingData = activeDuplicate.data();
+
             // แจ้งเตือนนักเรียนและหยุดการส่งทันที เพื่อไม่ให้เกิดข้อมูลซ้ำซ้อน
             await Swal.fire({
-                title: 'ตรวจพบการส่งข้อมูลซ้ำ!',
-                html: `ห้อง <b>${complaintData.roomNumber}</b> ในระดับชั้น <b>${complaintData.category}</b> มีการส่งข้อมูลไว้แล้วในระบบและกำลังรอการตรวจสอบ<br><br>คุณสามารถตรวจสอบผลคะแนนได้จากเมนูด้านล่างครับ`,
+                title: 'ตรวจพบเรื่องซ้ำในระบบ!',
+                html: `เรื่องนี้มีการแจ้งไว้แล้วในระบบ (Ticket ID: <b>${existingData.ticketId}</b>)<br><br><b>หัวข้อ:</b> ${existingData.title}<br><b>สถานที่:</b> ${existingData.location}<br><br>คุณสามารถใช้รหัส Ticket เดิมเพื่อติดตามความคืบหน้าได้เลยครับ`,
                 icon: 'info',
                 confirmButtonText: 'รับทราบ',
                 confirmButtonColor: '#1b5e20',
@@ -252,18 +369,15 @@ async function handleComplaintSubmit(e) {
         const previewContainer = document.getElementById('imagePreviewContainer');
         if (previewContainer) previewContainer.innerHTML = '';
 
-        if (document.getElementById('otherCategoryGroup')) document.getElementById('otherCategoryGroup').style.display = 'none';
-        if (document.getElementById('otherReporterTypeGroup')) document.getElementById('otherReporterTypeGroup').style.display = 'none';
+        document.getElementById('otherCategoryGroup').style.display = 'none';
+        document.getElementById('otherReporterTypeGroup').style.display = 'none';
+        document.getElementById('reporterNameGroup').style.opacity = '1';
+        document.getElementById('reporterName').disabled = false;
         document.getElementById('privacyConsent').checked = false;
 
     } catch (error) {
         console.error("Error submitting complaint:", error);
-        Swal.fire({
-            title: 'เกิดข้อผิดพลาด!',
-            text: 'ไม่สามารถส่งข้อมูลได้: ' + error.message,
-            icon: 'error',
-            confirmButtonColor: '#1b5e20'
-        });
+        alert("เกิดข้อผิดพลาดในการส่งข้อมูล: " + error.message + "\n\nกรุณาติดต่อแอดมินเพื่อขอความช่วยเหลือ");
     } finally {
         // คืนสถานะปุ่ม
         submitBtn.innerHTML = originalText;
@@ -307,7 +421,7 @@ async function uploadToImgBB(file) {
 // ===== ฟังก์ชันส่งอีเมลแจ้ง Ticket ID ผ่าน Google Apps Script =====
 async function sendEmailNotification(data) {
     // ⚠️ นำ URL จากการ Deploy Google Apps Script (Web App) มาวางที่นี่
-    const scriptURL = "https://script.google.com/macros/s/AKfycbwIrhfWhuU9cNWWvCv1Z9Fx5dqLwoqcb6zdkvn6khm1JgAQPSjPqPDAQ2LC1MJovTJD/exec"; // เปลี่ยนเป็น URL ของคุณ
+    const scriptURL = "https://script.google.com/macros/s/AKfycbw4zePrBbAJ8VHFbWBywUgo2WgQNLzrZ95qDdyEqicKOyWSbiCJgxNMLSzaH3vJCJyM8Q/exec"; // เปลี่ยนเป็น URL ของคุณ
 
     if (!scriptURL || scriptURL.includes("AKfycby")) {
         console.warn("⚠️ Google Apps Script: กรุณาใส่ URL ของ Web App ในฟังก์ชัน sendEmailNotification ในไฟล์ script.js");
@@ -358,54 +472,102 @@ function removeImage(index, btn) {
     });
 }
 
-// Ticket ID generation removed - tracking now uses Class/Room
+// ===== ฟังก์ชันสร้าง Ticket ID (รูปแบบ: SN-NNNNMM) =====
+// SN = สภานักเรียน
+// NNNN = เลขที่รันต่อเนื่อง (0001, 0002, ...)
+// MM = นาทีที่ส่งข้อมูล (00-59)
+async function generateTicketId() {
+    try {
+        const snapshot = await complaintsCollection.get();
+        const existingNums = [];
+
+        // ดึงเลขที่รันจาก Ticket ID ทั้งหมด
+        snapshot.forEach(doc => {
+            const tid = doc.data().ticketId;
+            if (tid && tid.startsWith("SN-")) {
+                // ตัด SN- ออก แล้วเอาแค่ 4 หลักแรก (เลขที่รัน)
+                const numPart = tid.replace("SN-", "").substring(0, 4);
+                const num = parseInt(numPart);
+                if (!isNaN(num)) existingNums.push(num);
+            }
+        });
+
+        // เรียงลำดับตัวเลขจากน้อยไปมาก
+        existingNums.sort((a, b) => a - b);
+
+        // หาเลขตัวแรกที่ว่างอยู่ (Smallest Missing Positive Integer)
+        let nextNum = 1;
+        for (let i = 0; i < existingNums.length; i++) {
+            if (existingNums[i] === nextNum) {
+                nextNum++;
+            } else if (existingNums[i] > nextNum) {
+                // เจอช่องว่างแล้ว
+                break;
+            }
+        }
+
+        // ดึงนาทีปัจจุบัน
+        const now = new Date();
+        const minute = now.getMinutes().toString().padStart(2, '0');
+
+        // สร้าง Ticket ID
+        const prefix = "SN-";
+        const formattedNum = nextNum.toString().padStart(4, '0'); // เลขที่รัน 4 หลัก
+        return prefix + formattedNum + minute; // SN-NNNNMM
+
+    } catch (error) {
+        console.error("Error generating Ticket ID:", error);
+        // Fallback กรณีเกิดข้อผิดพลาด
+        const now = new Date();
+        const minute = now.getMinutes().toString().padStart(2, '0');
+        return "SN-" + Math.floor(1000 + Math.random() * 9000) + minute;
+    }
+}
+
+// สร้าง Ticket ID ตัวอย่างสำหรับการแสดง
+async function generateSampleTicketId() {
+    const ticketIdInput = document.getElementById('ticketId');
+    if (ticketIdInput) {
+        ticketIdInput.placeholder = "เช่น: SN-000125";
+    }
+}
 
 
 
-
-// ===== ฟังก์ชันติดตามสถานะ (ค้นหาตามห้องเรียน) =====
+// ===== ฟังก์ชันติดตามสถานะ =====
 async function handleTrackStatus() {
-    const category = document.getElementById('trackCategory').value;
-    const roomNumber = document.getElementById('trackRoomNumber').value;
+    const ticketId = document.getElementById('ticketId').value.trim();
     const trackingResult = document.getElementById('trackingResult');
     const noResult = document.getElementById('noResult');
 
-    if (!category || !roomNumber) {
-        showAlert("กรุณาเลือกเลือกระดับชั้นและห้องเรียน", "warning");
+    if (!ticketId) {
+        showAlert("กรุณากรอกรหัส Ticket ID", "warning");
         return;
     }
 
     try {
-        // ค้นหาข้อมูลจาก Firestore - เอาอันล่าสุด (createdAt desc)
+        // ค้นหาข้อมูลจาก Firestore
         const querySnapshot = await complaintsCollection
-            .where("category", "==", category)
-            .where("roomNumber", "==", roomNumber)
-            .orderBy("createdAt", "desc")
+            .where("ticketId", "==", ticketId)
             .limit(1)
             .get();
 
         // แสดงข้อมูลที่พบ
-        if (querySnapshot.empty) {
-            Swal.fire({
-                title: 'ไม่พบข้อมูล',
-                text: 'ยังไม่พบข้อมูลการส่งผลงานของห้องเรียนนี้ในระบบครับ',
-                icon: 'warning',
-                confirmButtonColor: '#1b5e20'
-            });
-            return;
-        }
-
         const doc = querySnapshot.docs[0];
         const data = doc.data();
 
-        document.getElementById('resultClassDisplay').textContent = `${data.category} ห้อง ${data.roomNumber}`;
-        document.getElementById('resultClassInfo').textContent = `${data.category} ห้อง ${data.roomNumber}`;
-        document.getElementById('resultScore').textContent = data.score || '-';
-        document.getElementById('resultStatus').textContent = data.status === 'resolved' ? (data.updatedAt ? data.updatedAt.toDate().toLocaleDateString('th-TH') : '-') : getStatusText(data.status);
+        if (data.isDuplicate && data.duplicateOf) {
+            showAlert(`เรื่องนี้เป็นเรื่องซ้ำ กำลังดำเนินการรวมชุดข้อมูลกับ Ticket: ${data.duplicateOf}`, "info");
+        }
 
-        // อัปเดตข้อมูลอื่นๆ
-        if (document.getElementById('resultReporterType')) document.getElementById('resultReporterType').textContent = data.reporterType || '-';
-        if (document.getElementById('resultCategory')) document.getElementById('resultCategory').textContent = data.category || '-';
+        // อัพเดตข้อมูลในตาราง
+        document.getElementById('resultTicketId').textContent = data.ticketId;
+        document.getElementById('resultTitle').textContent = data.title;
+        document.getElementById('resultCategory').textContent = data.category;
+        document.getElementById('resultLocation').textContent = data.location || '-';
+        document.getElementById('resultIncidentDate').textContent = data.incidentDate ? new Date(data.incidentDate).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }) : '-';
+        document.getElementById('resultReporterType').textContent = data.reporterType || '-';
+        document.getElementById('resultStatus').textContent = getStatusText(data.status);
 
         // แสดง Admin Feedback (ถ้ามี)
         const feedbackContainer = document.getElementById('adminFeedbackContainer');
@@ -475,13 +637,13 @@ function updateProgressBar(status) {
             activeSteps = 1;
             break;
         case 'accepted':
-            activeSteps = 2; // รับข้อมูล
+            activeSteps = 2;
             break;
         case 'in-progress':
-            activeSteps = 3; // กำลังประเมิน
+            activeSteps = 3;
             break;
         case 'resolved':
-            activeSteps = 4; // ประเมินแล้ว
+            activeSteps = 4;
             break;
         default:
             activeSteps = 1;
@@ -505,32 +667,39 @@ function showSuccessModal(ticketId) {
     modal.show();
 }
 
-// ===== ฟังก์ชันแจ้งเตือนด้วย SweetAlert2 =====
+// ===== ฟังก์ชันแจ้งเตือน =====
 function showAlert(message, type = 'info') {
-    const iconMap = {
-        'info': 'info',
-        'warning': 'warning',
-        'danger': 'error',
-        'success': 'success'
-    };
+    // สร้างแจ้งเตือนชั่วคราว
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = `
+        top: 100px;
+        right: 20px;
+        z-index: 9999;
+        min-width: 300px;
+    `;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
 
-    Swal.fire({
-        title: type === 'danger' ? 'เกิดข้อผิดพลาด' : 'แจ้งเตือน',
-        text: message,
-        icon: iconMap[type] || 'info',
-        confirmButtonColor: '#1b5e20'
-    });
+    document.body.appendChild(alertDiv);
+
+    // ลบแจ้งเตือนหลังจาก 5 วินาที
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 5000);
 }
 
 // ===== ฟังก์ชันแปลงสถานะเป็นข้อความภาษาไทย =====
 function getStatusText(status) {
     const statusMap = {
-        'waiting': 'รอตรวจ',
-        'pending': 'รอตรวจ',
-        'accepted': 'รับข้อมูลแล้ว',
-        'in-progress': 'กำลังประเมิน',
-        'resolved': 'ประเมินแล้ว',
-        'rejected': 'ไม่ผ่าน/ข้อมูลไม่ชัดเจน'
+        'waiting': 'รอรับเรื่อง',
+        'pending': 'รอรับเรื่อง',
+        'accepted': 'รับเรื่องแล้ว',
+        'in-progress': 'ดำเนินการ',
+        'resolved': 'เสร็จสิ้น',
+        'rejected': 'ไม่รับเรื่อง'
     };
     return statusMap[status] || status;
 }
@@ -558,7 +727,7 @@ function renderTrackingTimeline(activities, createdAt) {
     const timelineContainer = document.querySelector('.timeline-v2');
     if (!timelineContainer) return;
 
-    // เริ่มต้นด้วยรายการ "ส่งผลงาน"
+    // เริ่มต้นด้วยรายการ "สร้างคำร้องเรียน"
     let timelineHTML = '';
 
     // เรียงกิจกรรมจากใหม่ไปเก่า
@@ -597,4 +766,47 @@ function renderTrackingTimeline(activities, createdAt) {
     timelineContainer.innerHTML = timelineHTML;
 }
 
-// Ticket ID Copy function removed
+// ===== ฟังก์ชันคัดลอก Ticket ID =====
+function copyTicketId() {
+    const ticketId = document.getElementById('generatedTicketId').textContent;
+    if (!ticketId) return;
+
+    navigator.clipboard.writeText(ticketId).then(() => {
+        Swal.fire({
+            icon: 'success',
+            title: 'คัดลอกสำเร็จ!',
+            text: 'คัดลอกรหัส Ticket ID เรียบร้อยแล้ว',
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000
+        });
+    });
+}
+
+// ===== ฟังก์ชันแสดง Developer Announcement Popup =====
+function showDeveloperAnnouncement() {
+    // ตรวจสอบว่าผู้ใช้เคยเลือก "ไม่ต้องแสดงอีก" หรือไม่
+    const dontShowAgain = localStorage.getItem('dontShowDevAnnouncement');
+
+    if (dontShowAgain === 'true') {
+        return; // ไม่แสดง popup ถ้าผู้ใช้เลือกไม่ต้องแสดงอีก
+    }
+
+    // แสดง modal หลังจากโหลดหน้าเว็บ 1 วินาที
+    setTimeout(() => {
+        const modal = new bootstrap.Modal(document.getElementById('developerAnnouncementModal'));
+        modal.show();
+
+        // จัดการปุ่มปิด modal
+        const modalElement = document.getElementById('developerAnnouncementModal');
+        const dontShowCheckbox = document.getElementById('dontShowAgain');
+
+        modalElement.addEventListener('hidden.bs.modal', function () {
+            // ถ้าผู้ใช้เลือก checkbox "ไม่ต้องแสดงอีก"
+            if (dontShowCheckbox && dontShowCheckbox.checked) {
+                localStorage.setItem('dontShowDevAnnouncement', 'true');
+            }
+        });
+    }, 1000);
+}
