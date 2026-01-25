@@ -652,6 +652,92 @@
 
     <!-- Main Script -->
     <script src="script.js"></script>
+
+    <!-- Developer Announcement Popup -->
+    <div class="modal fade" id="developerAnnouncementModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static"
+        data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content dev-announcement-modal">
+                <button type="button" class="btn-close-custom" data-bs-dismiss="modal" aria-label="Close">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+                <div class="modal-body p-0">
+                    <div class="announcement-header">
+                        <div class="announcement-icon-wrapper">
+                            <div class="announcement-icon">
+                                <i class="bi bi-megaphone-fill"></i>
+                            </div>
+                        </div>
+                        <h3 class="announcement-title">ประกาศจากผู้พัฒนา</h3>
+                        <p class="announcement-subtitle">Developer Announcement</p>
+                    </div>
+
+                    <div class="announcement-content">
+                        <div class="announcement-card">
+                            <div class="card-icon">
+                                <i class="bi bi-info-circle-fill"></i>
+                            </div>
+                            <div class="card-content">
+                                <h5>ยินดีต้อนรับสู่ระบบร้องเรียนออนไลน์</h5>
+                                <p>ระบบนี้พัฒนาขึ้นเพื่อให้นักเรียน ครู
+                                    และผู้ปกครองสามารถแจ้งเรื่องร้องเรียนหรือข้อเสนอแนะได้อย่างสะดวกและรวดเร็ว</p>
+                            </div>
+                        </div>
+
+                        <div class="announcement-card">
+                            <div class="card-icon bg-warning">
+                                <i class="bi bi-shield-check"></i>
+                            </div>
+                            <div class="card-content">
+                                <h5>ความเป็นส่วนตัวของคุณ</h5>
+                                <p>เราให้ความสำคัญกับความเป็นส่วนตัวของคุณ
+                                    ข้อมูลทั้งหมดจะถูกเก็บรักษาอย่างปลอดภัยและเข้าถึงได้เฉพาะผู้มีส่วนเกี่ยวข้องเท่านั้น
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="announcement-card">
+                            <div class="card-icon bg-info">
+                                <i class="bi bi-code-slash"></i>
+                            </div>
+                            <div class="card-content">
+                                <h5>เกี่ยวกับผู้พัฒนา</h5>
+                                <p>พัฒนาโดย <strong>นายธนากร แซ่จอง</strong> นักเรียนโรงเรียนสุรวิทยาคาร<br>
+                                    หากพบปัญหาหรือต้องการสอบถามข้อมูลเพิ่มเติม สามารถติดต่อผ่านช่องทางด้านล่างได้เลยครับ
+                                </p>
+                                <div class="developer-social-links">
+                                    <a href="https://github.com/Pooh191" target="_blank" class="dev-social-btn github">
+                                        <i class="bi bi-github"></i>
+                                    </a>
+                                    <a href="https://www.facebook.com/thanakorn.sae.jong.2024" target="_blank"
+                                        class="dev-social-btn facebook">
+                                        <i class="bi bi-facebook"></i>
+                                    </a>
+                                    <a href="https://www.instagram.com/thanakornsaejong6/" target="_blank"
+                                        class="dev-social-btn instagram">
+                                        <i class="bi bi-instagram"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="announcement-footer">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="dontShowAgain">
+                                <label class="form-check-label" for="dontShowAgain">
+                                    ไม่ต้องแสดงข้อความนี้อีก
+                                </label>
+                            </div>
+                            <button type="button" class="btn btn-announcement" data-bs-dismiss="modal">
+                                <i class="bi bi-check-circle me-2"></i>เข้าใจแล้ว
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- FAQ Modal -->
     <div class="modal fade" id="faqModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
