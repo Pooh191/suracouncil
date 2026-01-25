@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบจัดการร้องเรียน | สภานักเรียนโรงเรียนสุรวิทยาคาร</title>
+    <title>ระบบจัดการการประกวด | สภานักเรียนโรงเรียนสุรวิทยาคาร</title>
 
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -23,6 +23,7 @@
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="print.css">
 
     <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -56,8 +57,8 @@
                         <label for="adminEmail" class="form-label">อีเมลผู้ดูแล</label>
                         <div class="input-group">
                             <span class="input-group-text bg-light border-end-0"><i class="bi bi-envelope"></i></span>
-                            <input type="text" class="form-control border-start-0" id="adminEmail"
-                                placeholder="กรุณากรอกอีเมล หรือ เลขประจำตัว 5 หลัก" required>
+                            <input type="email" class="form-control border-start-0" id="adminEmail"
+                                placeholder="กรุณากรอกอีเมลหรือชื่อผู้ใช้" required>
                         </div>
                     </div>
 
@@ -97,7 +98,7 @@
                         <img src="logo.png" alt="Logo">
                     </div>
                     <div class="brand-text">
-                        ระบบจัดการข้อมูล<br>
+                        ระบบประเมินห้องเรียนสะอาด<br>
                         <small>สภานักเรียนโรงเรียนสุรวิทยาคาร</small>
                     </div>
                 </a>
@@ -106,12 +107,6 @@
                         <div class="fw-bold" id="adminName">Admin User</div>
                         <small class="text-white-50">ผู้ดูแลระบบ</small>
                     </div>
-                    <button class="btn btn-outline-light btn-sm px-3 rounded-pill me-2" id="changePasswordBtn">
-                        <i class="bi bi-key-fill me-1"></i> เปลี่ยนรหัสผ่าน
-                    </button>
-                    <button class="btn btn-outline-light btn-sm px-3 rounded-pill me-2 d-none" id="manageUsersBtn">
-                        <i class="bi bi-people-fill me-1"></i> จัดการผู้ใช้งาน
-                    </button>
                     <button class="btn btn-outline-light btn-sm px-3 rounded-pill" id="logoutBtn">
                         <i class="bi bi-box-arrow-right me-1"></i> ออกจากระบบ
                     </button>
@@ -123,15 +118,17 @@
             <!-- Header Section -->
             <div class="row mb-5">
                 <div class="col-12 text-center section-header">
-                    <h2 class="section-title">ภาพรวมระบบร้องเรียน</h2>
-                    <p class="section-subtitle">จัดการข้อมูลและติดตามสถานะการร้องเรียนล่าสุดจากนักเรียน</p>
+                    <h2 class="section-title">ภาพรวมการประกวดห้องเรียนสะอาด</h2>
+                    <p class="section-subtitle">จัดการข้อมูลและประเมินผลคะแนนห้องเรียนจากตัวแทนนักเรียน</p>
                 </div>
             </div>
 
             <!-- Statistics Cards -->
-            <div class="row mb-3" id="statsCards">
+            <div class="row mb-5" id="statsCards">
                 <!-- Cards will be populated by admin.js -->
             </div>
+
+
 
             <!-- Complaint Table Card -->
             <div class="card form-card mb-5 border-0">
@@ -142,11 +139,19 @@
                         <div class="title-area">
                             <h5 class="mb-0 fw-bold d-flex align-items-center">
                                 <span class="premium-title-vbar me-3"></span>
-                                รายการร้องเรียนทั้งหมด
+                                รายการส่งผลงานทั้งหมด
                             </h5>
-                            <p class="text-muted small mb-0 mt-1 ms-4">จัดการและติดตามสถานะเรื่องร้องเรียนแบบเรียลไทม์
+                            <p class="text-muted small mb-0 mt-1 ms-4">จัดการและประเมินผลคะแนนความสะอาดแบบเรียลไทม์
                             </p>
                         </div>
+
+                        <!-- Random Audit Button -->
+                        <button
+                            class="btn btn-outline-primary rounded-pill px-3 fw-bold d-flex align-items-center gap-2"
+                            onclick="startRandomAudit()" style="white-space: nowrap; height: 50px;">
+                            <i class="bi bi-dice-5-fill fs-5"></i>
+                            <span>สุ่มตรวจห้องเรียน</span>
+                        </button>
 
                         <!-- Search & Filter Area -->
                         <div
@@ -156,20 +161,22 @@
                                 <div class="search-wrapper">
                                     <i class="bi bi-search search-icon-v2"></i>
                                     <input type="text" id="searchInput" class="form-control admin-search-input-v2"
-                                        placeholder="ค้นหา Ticket ID หรือ หัวข้อเรื่อง...">
+                                        placeholder="ค้นหา ห้องเรียน หรือ ระดับชั้น...">
                                 </div>
                             </div>
 
                             <!-- Filter Group -->
                             <div class="filter-group d-flex gap-2">
                                 <div class="filter-item">
-                                    <div class="filter-label-v2"><i class="bi bi-folder-fill me-1"></i>หมวดหมู่</div>
+                                    <div class="filter-label-v2"><i class="bi bi-folder-fill me-1"></i>ระดับชั้น</div>
                                     <select id="categoryFilter" class="form-select admin-filter-select-v2">
-                                        <option value="">ทุกหมวดหมู่</option>
-                                        <option value="อาคารสถานที่">อาคารสถานที่</option>
-                                        <option value="ระบบการเรียนการสอน">ระบบการเรียนการสอน</option>
-                                        <option value="กิจกรรมนักเรียน">กิจกรรมนักเรียน</option>
-                                        <option value="สวัสดิการ">สวัสดิการ</option>
+                                        <option value="">ทุกระดับชั้น</option>
+                                        <option value="มัธยมศึกษาปีที่ 1">มัธยมศึกษาปีที่ 1</option>
+                                        <option value="มัธยมศึกษาปีที่ 2">มัธยมศึกษาปีที่ 2</option>
+                                        <option value="มัธยมศึกษาปีที่ 3">มัธยมศึกษาปีที่ 3</option>
+                                        <option value="มัธยมศึกษาปีที่ 4">มัธยมศึกษาปีที่ 4</option>
+                                        <option value="มัธยมศึกษาปีที่ 5">มัธยมศึกษาปีที่ 5</option>
+                                        <option value="มัธยมศึกษาปีที่ 6">มัธยมศึกษาปีที่ 6</option>
                                         <option value="อื่นๆ">อื่นๆ</option>
                                     </select>
                                 </div>
@@ -177,20 +184,11 @@
                                     <div class="filter-label-v2"><i class="bi bi-pin-angle-fill me-1"></i>สถานะ</div>
                                     <select id="statusFilter" class="form-select admin-filter-select-v2">
                                         <option value="">ทุกสถานะ</option>
-                                        <option value="waiting">รอรับเรื่อง</option>
-                                        <option value="accepted">รับเรื่องแล้ว</option>
-                                        <option value="in-progress">ดำเนินการ</option>
-                                        <option value="resolved">เสร็จสิ้น</option>
-                                        <option value="rejected">ไม่รับเรื่อง</option>
-                                    </select>
-                                </div>
-                                <div class="filter-item">
-                                    <div class="filter-label-v2"><i class="bi bi-calendar3 me-1"></i>ช่วงเวลา</div>
-                                    <select id="timeFilter" class="form-select admin-filter-select-v2">
-                                        <option value="">ทั้งหมด</option>
-                                        <option value="daily">รายวัน (วันนี้)</option>
-                                        <option value="monthly">รายเดือน (เดือนนี้)</option>
-                                        <option value="yearly">รายปี (ปีนี้)</option>
+                                        <option value="waiting">รอตรวจ</option>
+                                        <option value="accepted">รับข้อมูลแล้ว</option>
+                                        <option value="in-progress">กำลังประเมิน</option>
+                                        <option value="resolved">ประเมินแล้ว</option>
+                                        <option value="rejected">ไม่ผ่าน/ข้อมูลไม่ชัดเจน</option>
                                     </select>
                                 </div>
                             </div>
@@ -216,22 +214,17 @@
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
                             <thead class="bg-light text-secondary">
-                                <tr>
-                                    <th class="ps-4">Ticket ID</th>
-                                    <th>หัวข้อ</th>
-                                    <th>หมวดหมู่</th>
-                                    <th>สถานที่</th>
-                                    <th>วันที่พบปัญหา</th>
-                                    <th>ผู้ร้องเรียน</th>
-                                    <th>วันที่แจ้ง</th>
-                                    <th>สถานะ</th>
-                                    <th class="pe-4 text-center">จัดการ</th>
+                                <th class="ps-4">ระดับชั้น/ห้อง</th>
+                                <th>วันที่ประเมินล่าสุด</th>
+                                <th>คะแนน</th>
+                                <th>สถานะ</th>
+                                <th class="pe-4 text-center">จัดการ</th>
                                 </tr>
                             </thead>
                             <tbody id="complaintsTableBody">
                                 <!-- Rows will be populated by admin.js -->
                                 <tr>
-                                    <td colspan="7" class="text-center py-5">
+                                    <td colspan="6" class="text-center py-5">
                                         <div class="spinner-border text-success" role="status">
                                             <span class="visually-hidden">Loading...</span>
                                         </div>
@@ -247,52 +240,7 @@
                 </div>
             </div>
 
-            <!-- Daily Complaint Summary Calendar -->
-            <div class="row mb-5">
-                <div class="col-12">
-                    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
-                        <div
-                            class="card-header bg-white py-4 border-0 d-flex align-items-center justify-content-between">
-                            <div class="d-flex align-items-center">
-                                <span class="premium-title-vbar me-3" style="background: var(--primary-green);"></span>
-                                <div>
-                                    <h5 class="mb-0 fw-bold text-dark">ปฏิทินสรุปการร้องเรียนรายวัน</h5>
-                                    <p class="text-muted small mb-0">
-                                        แสดงจำนวนเรื่องที่ได้รับแจ้งในแต่ละวันของเดือนปัจจุบัน</p>
-                                </div>
-                            </div>
-                            <div class="calendar-nav d-flex gap-2 align-items-center">
-                                <select id="calendarMonthSelect"
-                                    class="form-select form-select-sm border-0 bg-light rounded-pill px-3"
-                                    style="width: 130px;"></select>
-                                <select id="calendarYearSelect"
-                                    class="form-select form-select-sm border-0 bg-light rounded-pill px-3"
-                                    style="width: 100px;"></select>
-                                <button class="btn btn-sm btn-outline-success rounded-circle border-0"
-                                    id="calendarTodayBtn" title="ไปที่เดือนปัจจุบัน">
-                                    <i class="bi bi-calendar2-event"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="card-body p-4 bg-light-subtle">
-                            <div class="calendar-grid-wrapper">
-                                <div class="calendar-header-grid mb-3">
-                                    <div class="text-danger">อา.</div>
-                                    <div>จ.</div>
-                                    <div>อ.</div>
-                                    <div>พ.</div>
-                                    <div>พฤ.</div>
-                                    <div>ศ.</div>
-                                    <div class="text-primary">ส.</div>
-                                </div>
-                                <div id="calendarGrid" class="calendar-body-grid">
-                                    <!-- Calendar days will be generated by admin.js -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+
 
             <!-- Visual Charts -->
             <div class="row mb-5">
@@ -311,7 +259,7 @@
                     <div class="card border-0 shadow-sm h-100 rounded-4">
                         <div class="card-body p-4">
                             <h6 class="fw-bold mb-4 text-dark"><i
-                                    class="bi bi-bar-chart-fill me-2 text-success"></i>เรื่องร้องเรียนแยกตามหมวดหมู่
+                                    class="bi bi-bar-chart-fill me-2 text-success"></i>จำนวนการส่งผลงานแยกตามระดับชั้น
                             </h6>
                             <div style="height: 300px; position: relative;">
                                 <canvas id="categoryChart"></canvas>
@@ -327,7 +275,7 @@
                     <div class="card border-0 shadow-sm h-100 rounded-4">
                         <div class="card-body p-4">
                             <h6 class="fw-bold mb-4 text-dark"><i
-                                    class="bi bi-graph-up-arrow me-2 text-success"></i>สถิตการร้องเรียนรายเดือน (6
+                                    class="bi bi-graph-up-arrow me-2 text-success"></i>สถิตการส่งผลงานรายเดือน (6
                                 เดือนล่าสุด)</h6>
                             <div style="height: 300px; position: relative;">
                                 <canvas id="trendChart"></canvas>
@@ -339,13 +287,71 @@
                     <div class="card border-0 shadow-sm h-100 rounded-4">
                         <div class="card-body p-4 text-center">
                             <h6 class="fw-bold mb-4 text-dark text-start"><i
-                                    class="bi bi-people-fill me-2 text-success"></i>สัดส่วนผู้ร้องเรียน</h6>
+                                    class="bi bi-people-fill me-2 text-success"></i>สัดส่วนตำแหน่งผู้ส่ง</h6>
                             <div style="height: 250px; position: relative;" class="mb-4">
                                 <canvas id="reporterChart"></canvas>
                             </div>
                             <div id="averageResolutionTime" class="p-3 bg-light rounded-4">
-                                <small class="text-muted d-block">ระยะเวลาแก้ไขเฉลี่ย</small>
+                                <small class="text-muted d-block">ระยะเวลาประเมินเฉลี่ย</small>
                                 <h4 class="fw-bold mb-0 text-success" id="avgTimeBox">-</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Report Section -->
+            <div class="row mb-5 section-fade-in" id="rankingSection">
+                <div class="col-12">
+                    <div class="card form-card border-0 shadow-sm overflow-hidden rounded-4">
+                        <div
+                            class="card-header bg-white py-4 border-0 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                            <div>
+                                <h5 class="mb-0 fw-bold d-flex align-items-center">
+                                    <span class="premium-title-vbar me-3"></span>
+                                    สรุปคะแนนแยกตามห้องเรียน
+                                </h5>
+                                <p class="text-muted small mb-0 mt-1 ms-4">จัดอันดับคะแนนรวมแต่ละห้องตามช่วงเวลา</p>
+                            </div>
+                            <div class="btn-group p-1 bg-light rounded-pill border" role="group">
+                                <button type="button" class="btn btn-sm rounded-pill btn-summary-filter" id="btnDaily"
+                                    onclick="generateSummary('daily')">รายวัน</button>
+                                <button type="button" class="btn btn-sm rounded-pill btn-summary-filter active"
+                                    id="btnWeekly" onclick="generateSummary('weekly')">รายสัปดาห์</button>
+                                <button type="button" class="btn btn-sm rounded-pill btn-summary-filter" id="btnMonthly"
+                                    onclick="generateSummary('monthly')">รายเดือน</button>
+                                <button type="button" class="btn btn-sm rounded-pill btn-summary-filter" id="btnYearly"
+                                    onclick="generateSummary('yearly')">รายปี</button>
+                            </div>
+                        </div>
+                        <div class="card-body p-4 pt-0">
+                            <div class="text-center mb-4 bg-light p-3 rounded-4 border">
+                                <h6 id="summaryRangeTitle" class="text-muted fw-bold text-uppercase mb-2 small">
+                                    ช่วงเวลาที่สรุปผล</h6>
+                                <span id="dateRangeDisplay"
+                                    class="badge bg-white text-success border px-4 py-2 rounded-pill fs-6 shadow-sm">-</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead class="text-secondary small text-uppercase">
+                                        <tr>
+                                            <th class="ps-4">อันดับ</th>
+                                            <th>ระดับชั้น/ห้อง</th>
+                                            <th class="text-center">ประเมินแล้ว (ครั้ง)</th>
+                                            <th class="text-center">คะแนนรวม</th>
+                                            <th class="text-center">คะแนนเฉลี่ย</th>
+                                            <th class="pe-4 text-center">สถานะห้องล่าสุด</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="summaryTableBody">
+                                        <tr>
+                                            <td colspan="6" class="text-center py-5 text-muted">
+                                                <div class="spinner-border spinner-border-sm text-success me-2"></div>
+                                                กำลังคำนวณอันดับคะแนน...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -356,56 +362,46 @@
         </div>
     </div>
 
-    <!-- User Management Section (แสดงเฉพาะแอดมินสูงสุด) -->
-    <div id="userManagementSection" class="dashboard-container d-none">
-        <div class="container" style="padding-top: 100px;">
-            <div class="row mb-5">
-                <div class="col-12 text-center section-header">
-                    <h2 class="section-title">จัดการผู้ใช้งานระบบ</h2>
-                    <p class="section-subtitle">เพิ่ม ลบ หรือแก้ไขข้อมูลผู้ดูแลระบบและคณะกรรมการสภานักเรียน</p>
-                    <button class="btn btn-success rounded-pill px-4 mt-3" id="addUserBtn">
-                        <i class="bi bi-person-plus-fill me-2"></i>เพิ่มผู้ใช้งานใหม่
-                    </button>
-                    <button class="btn btn-outline-secondary rounded-pill px-4 mt-3 ms-2" id="backToDashboardBtn">
-                        <i class="bi bi-speedometer2 me-2"></i>กลับหน้าแดชบอร์ด
-                    </button>
+    <!-- Random Audit Modal -->
+    <div class="modal fade" id="auditModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
+                <div class="modal-header border-0 bg-gradient-primary text-white p-4"
+                    style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);">
+                    <h5 class="modal-title fw-bold"><i
+                            class="bi bi-shield-check me-2"></i>ผลการสุ่มห้องเรียนเพื่อตรวจสอบ (Audit)</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
                 </div>
-            </div>
+                <div class="modal-body p-4 bg-light">
+                    <div class="text-center mb-4">
+                        <i class="bi bi-dice-5 text-primary" style="font-size: 3rem;"></i>
+                        <h5 class="fw-bold mt-2">รายการห้องที่ต้องตรวจสอบวันนี้</h5>
+                        <p class="text-muted small">ระบบสุ่มเลือก 3 ห้องเรียนจากระดับชั้นต่างๆ
+                            เพื่อให้สภานักเรียนลงพื้นที่ตรวจสอบจริง</p>
+                    </div>
 
-            <div class="card form-card mb-5 border-0">
-                <div class="card-header user-card-header py-4 border-0">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <h5 class="mb-0 fw-bold d-flex align-items-center">
-                            <span class="premium-title-vbar me-3"></span>
-                            รายชื่อผู้ใช้งานทั้งหมด
-                        </h5>
-                        <span id="userCountBadge" class="user-count-badge">โหลดข้อมูล...</span>
+                    <div id="auditListContainer" class="row g-3 justify-content-center">
+                        <!-- Audit cards will be injected here -->
+                        <div class="col-12 text-center py-4">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <div class="mt-2 text-muted">กำลังสุ่มเลือกห้องเรียน...</div>
+                        </div>
+                    </div>
+
+                    <div
+                        class="alert alert-info mt-4 mb-0 rounded-3 border-0 bg-white shadow-sm d-flex align-items-center">
+                        <i class="bi bi-info-circle-fill text-info fs-4 me-3"></i>
+                        <div>
+                            <div class="fw-bold text-dark">ขั้นตอนการปฏิบัติ</div>
+                            <div class="small text-muted">ให้กรรมการนักเรียนนำรายชื่อนี้ไปตรวจสอบห้องเรียนจริง
+                                แล้วบันทึกผลคะแนนลงในสมุดบันทึกเพื่อนำมาเปรียบเทียบกับคะแนนในระบบ</div>
+                        </div>
                     </div>
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="bg-light text-secondary">
-                                <tr>
-                                    <th class="ps-4">เลขประจำตัว</th>
-                                    <th>ชื่อ-นามสกุล</th>
-                                    <th>ตำแหน่ง</th>
-                                    <th>อีเมล</th>
-                                    <th class="pe-4 text-center">จัดการ</th>
-                                </tr>
-                            </thead>
-                            <tbody id="usersTableBody">
-                                <!-- User rows will be populated by admin.js -->
-                                <tr>
-                                    <td colspan="5" class="text-center py-5">
-                                        <div class="spinner-border text-success" role="status">
-                                            <span class="visually-hidden">Loading...</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="modal-footer border-0 bg-white p-3 justify-content-center">
+                    <button type="button" class="btn btn-primary rounded-pill px-5 fw-bold"
+                        data-bs-dismiss="modal">รับทราบภารกิจ</button>
                 </div>
             </div>
         </div>
@@ -422,7 +418,7 @@
                         </div>
                         <div>
                             <h5 class="mb-0">สภานักเรียนโรงเรียนสุรวิทยาคาร</h5>
-                            <p class="mb-0">ระบบจัดการหลังบ้าน</p>
+                            <p class="mb-0">ระบบประเมินห้องเรียนสะอาด</p>
                         </div>
                     </div>
                     <p class="text-white-50 small">
@@ -511,6 +507,9 @@
             <button id="acceptCookies" class="btn-cookie-accept">ยอมรับคุกกี้</button>
         </div>
     </div>
+
+    <!-- Printable Audit Form Area -->
+    <div id="printableArea" style="display: none;"></div>
 
     <!-- Admin Script -->
     <script src="admin.js"></script>
