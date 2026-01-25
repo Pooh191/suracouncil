@@ -12,6 +12,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // สุ่ม Ticket ID สำหรับการแสดงตัวอย่าง
     generateSampleTicketId();
+
+    // แสดง Developer Announcement Popup
+    showDeveloperAnnouncement();
 });
 
 // ===== ตั้งค่า Event Listeners =====
@@ -705,4 +708,31 @@ function copyTicketId() {
             timer: 3000
         });
     });
+}
+
+// ===== ฟังก์ชันแสดง Developer Announcement Popup =====
+function showDeveloperAnnouncement() {
+    // ตรวจสอบว่าผู้ใช้เคยเลือก "ไม่ต้องแสดงอีก" หรือไม่
+    const dontShowAgain = localStorage.getItem('dontShowDevAnnouncement');
+
+    if (dontShowAgain === 'true') {
+        return; // ไม่แสดง popup ถ้าผู้ใช้เลือกไม่ต้องแสดงอีก
+    }
+
+    // แสดง modal หลังจากโหลดหน้าเว็บ 1 วินาที
+    setTimeout(() => {
+        const modal = new bootstrap.Modal(document.getElementById('developerAnnouncementModal'));
+        modal.show();
+
+        // จัดการปุ่มปิด modal
+        const modalElement = document.getElementById('developerAnnouncementModal');
+        const dontShowCheckbox = document.getElementById('dontShowAgain');
+
+        modalElement.addEventListener('hidden.bs.modal', function () {
+            // ถ้าผู้ใช้เลือก checkbox "ไม่ต้องแสดงอีก"
+            if (dontShowCheckbox && dontShowCheckbox.checked) {
+                localStorage.setItem('dontShowDevAnnouncement', 'true');
+            }
+        });
+    }, 1000);
 }
