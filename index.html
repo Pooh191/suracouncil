@@ -124,122 +124,237 @@
                         <p class="section-subtitle">กรุณากรอกข้อมูลให้ครบถ้วนเพื่อให้เราสามารถช่วยเหลือท่านได้</p>
                     </div>
 
+                    <!-- Submission Stepper -->
+                    <div class="submission-stepper mb-5">
+                        <div class="step-item active" id="step1">
+                            <div class="step-circle">
+                                <i class="bi bi-megaphone"></i>
+                            </div>
+                            <div class="step-label">เลือกหัวข้อร้องเรียน</div>
+                        </div>
+                        <div class="step-item" id="step2">
+                            <div class="step-circle">
+                                <i class="bi bi-file-earmark-text"></i>
+                            </div>
+                            <div class="step-label">บันทึกคำร้อง</div>
+                        </div>
+                        <div class="step-item" id="step3">
+                            <div class="step-circle">
+                                <i class="bi bi-person-badge"></i>
+                            </div>
+                            <div class="step-label">ตรวจสอบความถูกต้อง</div>
+                        </div>
+                        <div class="step-item" id="step4">
+                            <div class="step-circle">
+                                <i class="bi bi-send"></i>
+                            </div>
+                            <div class="step-label">ยื่นคำร้องต่อสภานักเรียนโรงเรียนสุรวิทยาคาร</div>
+                        </div>
+                    </div>
+
                     <div class="card form-card">
                         <div class="card-body p-4 p-md-5">
-                            <form id="complaintForm">
-                                <div class="row">
-                                    <!-- หัวข้อเรื่อง -->
-                                    <div class="col-md-12 mb-3">
-                                        <label for="title" class="form-label">หัวข้อเรื่อง</label>
-                                        <input type="text" class="form-control" id="title" required>
-                                    </div>
-
-                                    <!-- ประเภทเรื่อง -->
-                                    <div class="col-md-6 mb-3">
-                                        <label for="category" class="form-label">ประเภทเรื่อง</label>
-                                        <select class="form-select" id="category" required>
-                                            <option value="" selected disabled>เลือกประเภทเรื่อง</option>
-                                            <option value="อาคารสถานที่">อาคารสถานที่</option>
-                                            <option value="ระบบการเรียนการสอน">ระบบการเรียนการสอน</option>
-                                            <option value="กิจกรรมนักเรียน">กิจกรรมนักเรียน</option>
-                                            <option value="สวัสดิการ">สวัสดิการ</option>
-                                            <option value="อื่นๆ">อื่นๆ</option>
-                                        </select>
-                                    </div>
-
-                                    <!-- ระบุประเภทเรื่องอื่นๆ (ซ่อนไว้เริ่มต้น) -->
-                                    <div class="col-md-6 mb-3" id="otherCategoryGroup" style="display: none;">
-                                        <label for="otherCategory" class="form-label">โปรดระบุประเภทเรื่อง</label>
-                                        <input type="text" class="form-control" id="otherCategory"
-                                            placeholder="ระบุประเภทเรื่องที่ต้องการแจ้ง">
-                                    </div>
-
-                                    <!-- ประเภทผู้แจ้ง -->
-                                    <div class="col-md-6 mb-3">
-                                        <label for="reporterType" class="form-label">ประเภทผู้แจ้ง</label>
-                                        <select class="form-select" id="reporterType" required>
-                                            <option value="" selected disabled>เลือกประเภทผู้แจ้ง</option>
-                                            <option value="นักเรียน">นักเรียน</option>
-                                            <option value="ครูบุคลากร">ครูบุคลากร</option>
-                                            <option value="ผู้ปกครอง">ผู้ปกครอง</option>
-                                            <option value="ผู้มาติดต่อราชการ">ผู้มาติดต่อราชการ</option>
-                                            <option value="อื่นๆ">อื่นๆ</option>
-                                        </select>
-                                    </div>
-
-                                    <!-- ระบุประเภทผู้แจ้งอื่นๆ (ซ่อนไว้เริ่มต้น) -->
-                                    <div class="col-md-6 mb-3" id="otherReporterTypeGroup" style="display: none;">
-                                        <label for="otherReporterType" class="form-label">โปรดระบุประเภทผู้แจ้ง</label>
-                                        <input type="text" class="form-control" id="otherReporterType"
-                                            placeholder="ระบุประเภทผู้แจ้ง">
-                                    </div>
-
-                                    <!-- สถานที่/อาคารที่เกิดปัญหา -->
-                                    <div class="col-md-6 mb-3">
-                                        <label for="location" class="form-label">สถานที่ / อาคารที่เกิดปัญหา</label>
-                                        <input type="text" class="form-control" id="location"
-                                            placeholder="เช่น อาคาร 3 ชั้น 2 หรือ สนามฟุตบอล" required>
-                                    </div>
-
-                                    <!-- วันที่ที่เกิดปัญหา -->
-                                    <div class="col-md-6 mb-3">
-                                        <label for="incidentDate" class="form-label">วันที่พบปัญหา</label>
-                                        <div class="date-input-group">
-                                            <i class="bi bi-calendar-check"></i>
-                                            <input type="date" class="form-control" id="incidentDate" required>
+                            <form id="complaintForm" novalidate>
+                                <!-- Step 1: เลือกหัวข้อร้องเรียน -->
+                                <div class="form-step active" id="formStep1">
+                                    <div class="step-header mb-4 mt-2">
+                                        <h4 class="fw-bold text-success"><i class="bi bi-megaphone me-2"></i>ขั้นตอนที่
+                                            1: แจ้งเรื่องร้องเรียน</h4>
+                                        <div class="text-muted small">กรุณาระบุเรื่องที่ต้องการแจ้งและประเภทของเรื่อง
                                         </div>
                                     </div>
+                                    <div class="row">
+                                        <!-- หัวข้อเรื่อง -->
+                                        <div class="col-md-12 mb-3">
+                                            <label for="title" class="form-label">เรื่องที่ต้องการแจ้ง</label>
+                                            <input type="text" class="form-control" id="title"
+                                                placeholder="ระบุสิ่งที่ต้องการแจ้งสั้นๆ" required>
+                                        </div>
 
-                                    <!-- ชื่อ-นามสกุล -->
-                                    <div class="col-md-6 mb-3">
-                                        <div id="reporterNameGroup">
-                                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                                <label for="reporterName" class="form-label mb-0">ชื่อ-นามสกุล</label>
-                                                <div class="form-check mb-0">
-                                                    <input class="form-check-input" type="checkbox" id="anonymous">
-                                                    <label class="form-check-label small" for="anonymous">
-                                                        ไม่ระบุตัวตน
-                                                    </label>
-                                                </div>
+                                        <!-- ประเภทเรื่อง -->
+                                        <div class="col-md-6 mb-3">
+                                            <label for="category" class="form-label">ประเภทเรื่อง</label>
+                                            <select class="form-select" id="category" required>
+                                                <option value="" selected disabled>เลือกประเภทเรื่อง</option>
+                                                <option value="อาคารสถานที่">อาคารสถานที่</option>
+                                                <option value="ระบบการเรียนการสอน">ระบบการเรียนการสอน</option>
+                                                <option value="กิจกรรมนักเรียน">กิจกรรมนักเรียน</option>
+                                                <option value="สวัสดิการ">สวัสดิการ</option>
+                                                <option value="อื่นๆ">อื่นๆ</option>
+                                            </select>
+                                        </div>
+
+                                        <!-- ระบุประเภทเรื่องอื่นๆ (ซ่อนไว้เริ่มต้น) -->
+                                        <div class="col-md-6 mb-3" id="otherCategoryGroup" style="display: none;">
+                                            <label for="otherCategory" class="form-label">โปรดระบุประเภทเรื่อง</label>
+                                            <input type="text" class="form-control" id="otherCategory"
+                                                placeholder="ระบุประเภทเรื่องที่ต้องการแจ้ง">
+                                        </div>
+
+                                        <!-- ประเภทผู้แจ้ง -->
+                                        <div class="col-md-6 mb-3">
+                                            <label for="reporterType" class="form-label">ประเภทผู้แจ้ง</label>
+                                            <select class="form-select" id="reporterType" required>
+                                                <option value="" selected disabled>เลือกประเภทผู้แจ้ง</option>
+                                                <option value="นักเรียน">นักเรียน</option>
+                                                <option value="ครูบุคลากร">ครูบุคลากร</option>
+                                                <option value="ผู้ปกครอง">ผู้ปกครอง</option>
+                                                <option value="ผู้มาติดต่อราชการ">ผู้มาติดต่อราชการ</option>
+                                                <option value="อื่นๆ">อื่นๆ</option>
+                                            </select>
+                                        </div>
+
+                                        <!-- ระบุประเภทผู้แจ้งอื่นๆ (ซ่อนไว้เริ่มต้น) -->
+                                        <div class="col-md-6 mb-3" id="otherReporterTypeGroup" style="display: none;">
+                                            <label for="otherReporterType"
+                                                class="form-label">โปรดระบุประเภทผู้แจ้ง</label>
+                                            <input type="text" class="form-control" id="otherReporterType"
+                                                placeholder="ระบุประเภทผู้แจ้ง">
+                                        </div>
+                                    </div>
+                                    <div class="text-end mt-4">
+                                        <button type="button" class="btn btn-success btn-lg px-5" onclick="goToStep(2)">
+                                            บันทึกข้อมูลและถัดไป <i class="bi bi-arrow-right ms-2"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2: บันทึกคำร้อง -->
+                                <div class="form-step" id="formStep2">
+                                    <div class="step-header mb-4 mt-2">
+                                        <h4 class="fw-bold text-success"><i
+                                                class="bi bi-file-earmark-text me-2"></i>ขั้นตอนที่ 2: บันทึกคำร้อง</h4>
+                                        <div class="text-muted small">ระบุรายละเอียด สถานที่ และแนบรูปภาพหลักฐาน (ถ้ามี)
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <!-- สถานที่/อาคารที่เกิดปัญหา -->
+                                        <div class="col-md-6 mb-3">
+                                            <label for="location" class="form-label">สถานที่ / อาคารที่เกิดปัญหา</label>
+                                            <input type="text" class="form-control" id="location"
+                                                placeholder="เช่น อาคาร 3 ชั้น 2 หรือ สนามฟุตบอล" required>
+                                        </div>
+
+                                        <!-- วันที่ที่เกิดปัญหา -->
+                                        <div class="col-md-6 mb-3">
+                                            <label for="incidentDate" class="form-label">วันที่พบปัญหา</label>
+                                            <div class="date-input-group">
+                                                <i class="bi bi-calendar-check"></i>
+                                                <input type="date" class="form-control" id="incidentDate" required>
                                             </div>
-                                            <input type="text" class="form-control" id="reporterName"
-                                                placeholder="ระบุชื่อของคุณ" required>
+                                        </div>
+
+                                        <!-- ชื่อ-นามสกุล -->
+                                        <div class="col-md-6 mb-3">
+                                            <div id="reporterNameGroup">
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <label for="reporterName"
+                                                        class="form-label mb-0">ชื่อ-นามสกุล</label>
+                                                    <div class="form-check mb-0">
+                                                        <input class="form-check-input" type="checkbox" id="anonymous">
+                                                        <label class="form-check-label small" for="anonymous">
+                                                            ไม่ระบุตัวตน
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <input type="text" class="form-control" id="reporterName"
+                                                    placeholder="ระบุชื่อของคุณ" required>
+                                            </div>
+                                        </div>
+
+                                        <!-- อีเมล -->
+                                        <div class="col-md-6 mb-3">
+                                            <label for="reporterEmail" class="form-label">อีเมลสำหรับรับ Ticket ID <span
+                                                    class="text-danger">*</span></label>
+                                            <input type="email" class="form-control" id="reporterEmail"
+                                                placeholder="กรอกอีเมลของท่านเพื่อติดตามสถานะคำร้องเรียน" required>
+                                        </div>
+
+                                        <!-- รายละเอียด -->
+                                        <div class="col-12 mb-3">
+                                            <label for="details" class="form-label">รายละเอียด</label>
+                                            <textarea class="form-control" id="details" rows="5" required></textarea>
+                                        </div>
+
+                                        <!-- อัปโหลดรูปภาพ -->
+                                        <div class="col-12 mb-4">
+                                            <label for="imageUpload" class="form-label">อัปโหลดรูปภาพหลักฐาน
+                                                (เลือกได้ไม่เกิน 3 รูป, รวมไม่เกิน 5MB)</label>
+                                            <div class="upload-container border-2 border-dashed rounded-4 p-4 text-center bg-light shadow-sm"
+                                                style="border: 2px dashed #cbd5e1; cursor: pointer;">
+                                                <input class="form-control d-none" type="file" id="imageUpload"
+                                                    accept="image/*" multiple>
+                                                <label for="imageUpload" class="mb-0 w-100 cursor-pointer">
+                                                    <i class="bi bi-images fs-1 text-success mb-2 d-block"></i>
+                                                    <span
+                                                        class="d-block fw-bold">คลิกที่นี่เพื่อเลือกรูปภาพหลักฐาน</span>
+                                                    <small class="text-muted">คุณสามารถเลือกได้มากกว่า 1 รูป</small>
+                                                </label>
+                                            </div>
+                                            <div id="imagePreviewContainer" class="row g-2 mt-3"></div>
                                         </div>
                                     </div>
-
-                                    <!-- อีเมล -->
-                                    <div class="col-md-6 mb-3">
-                                        <label for="reporterEmail" class="form-label">อีเมลสำหรับรับ Ticket ID <span
-                                                class="text-danger">*</span></label>
-                                        <input type="email" class="form-control" id="reporterEmail"
-                                            placeholder="กรอกอีเมลของท่านเพื่อติดตามสถานะคำร้องเรียน" required>
+                                    <div class="d-flex justify-content-between mt-4">
+                                        <button type="button" class="btn btn-outline-secondary btn-lg px-4"
+                                            onclick="goToStep(1)">
+                                            <i class="bi bi-arrow-left me-2"></i> ย้อนกลับ
+                                        </button>
+                                        <button type="button" class="btn btn-success btn-lg px-5" onclick="goToStep(3)">
+                                            ตรวจสอบความถูกต้อง <i class="bi bi-arrow-right ms-2"></i>
+                                        </button>
                                     </div>
+                                </div>
 
-                                    <!-- รายละเอียด -->
-                                    <div class="col-12 mb-3">
-                                        <label for="details" class="form-label">รายละเอียด</label>
-                                        <textarea class="form-control" id="details" rows="5" required></textarea>
-                                    </div>
-
-                                    <!-- อัปโหลดรูปภาพ -->
-                                    <div class="col-12 mb-4">
-                                        <label for="imageUpload" class="form-label">อัปโหลดรูปภาพหลักฐาน
-                                            (เลือกได้ไม่เกิน 3 รูป, รวมไม่เกิน 5MB)</label>
-                                        <div class="upload-container border-2 border-dashed rounded-4 p-4 text-center bg-light shadow-sm"
-                                            style="border: 2px dashed #cbd5e1; cursor: pointer;">
-                                            <input class="form-control d-none" type="file" id="imageUpload"
-                                                accept="image/*" multiple>
-                                            <label for="imageUpload" class="mb-0 w-100 cursor-pointer">
-                                                <i class="bi bi-images fs-1 text-success mb-2 d-block"></i>
-                                                <span class="d-block fw-bold">คลิกที่นี่เพื่อเลือกรูปภาพหลักฐาน</span>
-                                                <small class="text-muted">คุณสามารถเลือกได้มากกว่า 1 รูป</small>
-                                            </label>
+                                <!-- Step 3: ตรวจสอบความถูกต้อง -->
+                                <div class="form-step" id="formStep3">
+                                    <div class="step-header mb-4 mt-2">
+                                        <h4 class="fw-bold text-success"><i
+                                                class="bi bi-person-badge me-2"></i>ขั้นตอนที่ 3: ตรวจสอบความถูกต้อง
+                                        </h4>
+                                        <div class="text-muted small">
+                                            ตรวจสอบข้อมูลทั้งหมดอีกครั้งก่อนยื่นคำร้องต่อสภานักเรียนโรงเรียนสุรวิทยาคาร
                                         </div>
-                                        <div id="imagePreviewContainer" class="row g-2 mt-3"></div>
+                                    </div>
+                                    <div class="step-summary-card mb-4">
+                                        <div class="step-summary-header">
+                                            <h5 class="fw-bold mb-0 text-dark"><i
+                                                    class="bi bi-card-checklist me-2 text-success"></i>สรุปข้อมูลคำร้องเรียน
+                                            </h5>
+                                        </div>
+                                        <div class="step-summary-body">
+                                            <div class="summary-item">
+                                                <div class="summary-label-group">
+                                                    <div class="summary-icon"><i class="bi bi-chat-quote"></i></div>
+                                                    <span class="summary-label">เรื่องที่แจ้ง</span>
+                                                </div>
+                                                <span class="summary-value" id="summaryTitle">-</span>
+                                            </div>
+                                            <div class="summary-item">
+                                                <div class="summary-label-group">
+                                                    <div class="summary-icon"><i class="bi bi-tag"></i></div>
+                                                    <span class="summary-label">ประเภท</span>
+                                                </div>
+                                                <span class="summary-value" id="summaryCategory">-</span>
+                                            </div>
+                                            <div class="summary-item">
+                                                <div class="summary-label-group">
+                                                    <div class="summary-icon"><i class="bi bi-geo-alt"></i></div>
+                                                    <span class="summary-label">สถานที่</span>
+                                                </div>
+                                                <span class="summary-value" id="summaryLocation">-</span>
+                                            </div>
+                                            <div class="summary-item">
+                                                <div class="summary-label-group">
+                                                    <div class="summary-icon"><i class="bi bi-person"></i></div>
+                                                    <span class="summary-label">ผู้แจ้ง</span>
+                                                </div>
+                                                <span class="summary-value" id="summaryReporter">-</span>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <!-- ยอมรับความเป็นส่วนตัว -->
-                                    <div class="col-12 mb-4">
+                                    <div class="mb-4">
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" id="privacyConsent"
                                                 required>
@@ -251,10 +366,13 @@
                                         </div>
                                     </div>
 
-                                    <!-- ปุ่มส่งฟอร์ม -->
-                                    <div class="col-12">
-                                        <button type="submit" class="btn btn-success btn-lg w-100">
-                                            ส่งคำร้องเรียน
+                                    <div class="d-flex justify-content-between mt-4">
+                                        <button type="button" class="btn btn-outline-secondary btn-lg px-4"
+                                            onclick="goToStep(2)">
+                                            <i class="bi bi-arrow-left me-2"></i> ย้อนกลับ
+                                        </button>
+                                        <button type="submit" class="btn btn-success btn-lg px-5">
+                                            ส่งคำร้องเรียน <i class="bi bi-send ms-2"></i>
                                         </button>
                                     </div>
                                 </div>
