@@ -19,6 +19,8 @@ const POSITIONS = [
     "รองประธานกรรมการสภานักเรียน คนที่หนึ่ง",
     "รองประธานกรรมการสภานักเรียน คนที่สอง",
     "เลขานุการคณะกรรมการสภานักเรียน",
+    "หัวหน้ากลุ่ม",
+    "หัวหน้าฝ่าย",
     "กรรมการสภานักเรียน",
     "อนุกรรมการสภานักเรียน"
 ];
@@ -1041,7 +1043,8 @@ async function handleViewDetails(complaintIdOrEvent) {
             padding: '1.5rem',
             background: '#fff',
             customClass: {
-                popup: 'rounded-5 overflow-hidden'
+                popup: 'rounded-5 overflow-hidden',
+                container: 'premium-swal-container'
             },
             showClass: {
                 popup: 'animate__animated animate__fadeInDown'
@@ -2103,11 +2106,18 @@ function renderComplaintCalendar(dailyCounts) {
         const dayCell = document.createElement('div');
         dayCell.className = 'calendar-day';
 
-        if (day === now.getDate() && month === now.getMonth() && year === now.getFullYear()) {
+        const isToday = day === now.getDate() && month === now.getMonth() && year === now.getFullYear();
+        const dateToCheck = new Date(year, month, day);
+        const isFuture = dateToCheck > now;
+
+        if (isToday) {
             dayCell.classList.add('today');
         }
 
-        if (count > 0) {
+        if (isFuture) {
+            dayCell.classList.add('future-day');
+            dayCell.title = "ไม่สามารถดูข้อมูลล่วงหน้าได้";
+        } else if (count > 0) {
             dayCell.classList.add('has-data');
             // ถ้ามีการร้องเรียนเยอะ (มากกว่า 5 เรื่อง) ให้ใช้สีแดงแจ้งเตือน
             if (count > 5) dayCell.classList.add('has-data-high');
@@ -2115,6 +2125,9 @@ function renderComplaintCalendar(dailyCounts) {
             // ทำให้กดดูรายละเอียดได้
             dayCell.style.cursor = 'pointer';
             dayCell.addEventListener('click', () => showDailyDetails(day, month, year));
+        } else {
+            // วันในอดีตที่ไม่มีข้อมูล
+            dayCell.classList.add('no-data');
         }
 
         dayCell.innerHTML = `
@@ -2135,85 +2148,117 @@ async function showDailyDetails(day, month, year) {
 
     const dateStr = `${day} ${months[month]} ${year + 543}`;
 
+    // ฟังก์ชันย่อยสำหรับโหลดและสร้าง HTML รายการ
+    const loadAndRenderList = async (targetElement) => {
+        try {
+            const startOfDay = new Date(year, month, day);
+            const endOfDay = new Date(year, month, day, 23, 59, 59);
+
+            const snapshot = await complaintsCollection
+                .where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(startOfDay))
+                .where('createdAt', '<=', firebase.firestore.Timestamp.fromDate(endOfDay))
+                .get();
+
+            if (snapshot.empty) {
+                targetElement.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="bi bi-clipboard-x text-muted" style="font-size: 3rem;"></i>
+                        <p class="mt-3 text-muted">ไม่พบข้อมูลการร้องเรียนในวันนี้</p>
+                    </div>`;
+                return;
+            }
+
+            let html = '';
+            snapshot.docs.forEach((doc, index) => {
+                const data = doc.data();
+                const docId = doc.id;
+                const isLocked = data.status === 'resolved' || data.status === 'rejected';
+
+                html += `
+                    <div class="daily-complaint-item" style="animation-delay: ${index * 0.1}s">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <span class="daily-ticket-badge">#${data.ticketId}</span>
+                            <span class="status-badge status-${data.status || 'pending'} shadow-sm">
+                                 <i class="bi bi-dot fs-4"></i>${getStatusText(data.status)}
+                            </span>
+                        </div>
+                        
+                        <div class="daily-title">${data.title}</div>
+                        <div class="daily-desc">${data.details ? (data.details.length > 180 ? data.details.substring(0, 180) + '...' : data.details) : 'ไม่มีรายละเอียดเพิ่มเติม'}</div>
+                        
+                        <div class="daily-meta-grid">
+                            <div class="daily-meta-item">
+                                <i class="bi bi-folder2-open"></i>
+                                <span>${data.category}</span>
+                            </div>
+                            <div class="daily-meta-item">
+                                <i class="bi bi-person-badge"></i>
+                                <span>${data.reporterName || 'ไม่ระบุตัวตน'}</span>
+                            </div>
+                            <div class="daily-meta-item">
+                                <i class="bi bi-geo-alt"></i>
+                                <span>${data.location || 'ไม่ระบุสถานที่'}</span>
+                            </div>
+                        </div>
+
+                        <!-- เพิ่มส่วนการเปลี่ยนสถานะแบบด่วน -->
+                        <div class="daily-action-row d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3">
+                            <div class="quick-status-change-wrapper">
+                                <label class="status-label-v3"><i class="bi bi-lightning-fill text-warning"></i>เปลี่ยนสถานะด่วน</label>
+                                <select class="status-select-daily" 
+                                        data-id="${docId}" 
+                                        ${isLocked ? 'disabled' : ''}>
+                                    <option value="waiting" ${data.status === 'waiting' || data.status === 'pending' ? 'selected' : ''}>รอรับเรื่อง</option>
+                                    <option value="accepted" ${data.status === 'accepted' ? 'selected' : ''}>รับเรื่องแล้ว</option>
+                                    <option value="in-progress" ${data.status === 'in-progress' ? 'selected' : ''}>ดำเนินการ</option>
+                                    <option value="resolved" ${data.status === 'resolved' ? 'selected' : ''}>เสร็จสิ้น</option>
+                                    <option value="rejected" ${data.status === 'rejected' ? 'selected' : ''}>ไม่รับเรื่อง</option>
+                                </select>
+                            </div>
+                            <button class="btn daily-manage-link" onclick="handleViewDetails('${docId}')">
+                                <i class="bi bi-pencil-square"></i> รายละเอียด/จัดการ
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            targetElement.innerHTML = html;
+
+            // ผูก Event Listener ใหม่ทุกครั้งที่เรนเดอร์
+            targetElement.querySelectorAll('.status-select-daily').forEach(select => {
+                select.addEventListener('change', async (e) => {
+                    const originalStatus = e.target.getAttribute('data-original-status');
+                    const confirmed = await handleStatusChange(e);
+
+                    // หลังจากเปลี่ยนสถานะเสร็จ ให้รีเฟรชหน้าต่างนี้ด้วย
+                    loadAndRenderList(targetElement);
+                });
+            });
+
+        } catch (error) {
+            console.error("Error fetching daily details:", error);
+            targetElement.innerHTML =
+                '<div class="alert alert-danger shadow-sm rounded-4">เกิดข้อผิดพลาดในการโหลดข้อมูล: ' + error.message + '</div>';
+        }
+    };
+
     Swal.fire({
         title: `รายการร้องเรียนวันที่ ${dateStr}`,
-        html: '<div id="dailyComplaintsList" class="text-start" style="max-height: 60vh; overflow-y: auto; padding: 10px;"><div class="text-center py-5"><div class="spinner-border text-success" role="status"></div><p class="mt-2 text-muted">กำลังโหลดข้อมูล...</p></div></div>',
-        width: '700px',
+        html: '<div id="dailyComplaintsList" class="text-start" style="max-height: 65vh; overflow-y: auto; padding: 10px;"></div>',
+        width: '800px',
         showConfirmButton: false,
         showCloseButton: true,
         background: '#f8fafc',
         customClass: {
             container: 'premium-swal-container',
             title: 'fw-bold text-success pt-4'
+        },
+        didOpen: () => {
+            const listEl = document.getElementById('dailyComplaintsList');
+            listEl.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-success" role="status"></div><p class="mt-2 text-muted">กำลังโหลดข้อมูล...</p></div>';
+            loadAndRenderList(listEl);
         }
     });
-
-    try {
-        const startOfDay = new Date(year, month, day);
-        const endOfDay = new Date(year, month, day, 23, 59, 59);
-
-        const snapshot = await complaintsCollection
-            .where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(startOfDay))
-            .where('createdAt', '<=', firebase.firestore.Timestamp.fromDate(endOfDay))
-            .get();
-
-        const listEl = document.getElementById('dailyComplaintsList');
-        if (snapshot.empty) {
-            listEl.innerHTML = `
-                <div class="text-center py-5">
-                    <i class="bi bi-clipboard-x text-muted" style="font-size: 3rem;"></i>
-                    <p class="mt-3 text-muted">ไม่พบข้อมูลการร้องเรียนในวันนี้</p>
-                </div>`;
-            return;
-        }
-
-        let html = '';
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            const docId = doc.id;
-
-            // กำหนดสีสถานะแบบเดียวกับตารางหลัก
-            let statusClass = 'status-waiting';
-            if (data.status === 'accepted') statusClass = 'status-accepted';
-            else if (data.status === 'in-progress') statusClass = 'status-in-progress';
-            else if (data.status === 'resolved') statusClass = 'status-resolved';
-            else if (data.status === 'rejected') statusClass = 'status-rejected';
-
-            html += `
-                <div class="daily-complaint-item animate__animated animate__fadeInUp">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="daily-ticket-badge">#${data.ticketId}</span>
-                        <span class="status-badge status-${data.status || 'pending'} shadow-sm" style="font-size: 0.75rem; padding: 6px 14px;">
-                             ${getStatusText(data.status)}
-                        </span>
-                    </div>
-                    <div class="daily-title">${data.title}</div>
-                    <div class="daily-desc">${data.description ? (data.description.length > 150 ? data.description.substring(0, 150) + '...' : data.description) : 'ไม่มีรายละเอียดเพิ่มเติม'}</div>
-                    <div class="daily-meta-grid">
-                        <div class="daily-meta-item">
-                            <i class="bi bi-folder-fill"></i>
-                            <span>${data.category}</span>
-                        </div>
-                        <div class="daily-meta-item">
-                            <i class="bi bi-person-fill"></i>
-                            <span>${data.reporterName || 'ไม่ระบุตัวตน'}</span>
-                        </div>
-                    </div>
-                    <div class="text-end">
-                        <button class="btn daily-manage-link" onclick="handleViewDetails('${docId}')">
-                            <i class="bi bi-pencil-square"></i> ดูและจัดการเรื่องนี้
-                        </button>
-                    </div>
-                </div>
-            `;
-        });
-        listEl.innerHTML = html;
-
-    } catch (error) {
-        console.error("Error fetching daily details:", error);
-        document.getElementById('dailyComplaintsList').innerHTML =
-            '<div class="alert alert-danger shadow-sm rounded-4">เกิดข้อผิดพลาดในการโหลดข้อมูล: ' + error.message + '</div>';
-    }
 }
 
 // ===== ฟังก์ชันจัดการตัวเลือกปฏิทิน =====
@@ -2249,12 +2294,49 @@ function initCalendarSelectors() {
 
     // Event Listeners
     monthSelect.addEventListener('change', (e) => {
-        calendarSelectedMonth = parseInt(e.target.value);
+        const newMonth = parseInt(e.target.value);
+        const checkDate = new Date(calendarSelectedYear, newMonth, 1);
+        const now = new Date();
+        const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        if (checkDate > currentMonthStart) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'ไม่สามารถดูข้อมูลล่วงหน้าได้',
+                text: 'กรุณาเลือกเดือนปัจจุบันหรือย้อนหลัง',
+                confirmButtonColor: '#1b5e20'
+            });
+            e.target.value = calendarSelectedMonth;
+            return;
+        }
+
+        calendarSelectedMonth = newMonth;
         loadStatistics(); // รีโหลดสถิติเพื่อคำนวณ dailyCounts ใหม่
     });
 
     yearSelect.addEventListener('change', (e) => {
-        calendarSelectedYear = parseInt(e.target.value);
+        const newYear = parseInt(e.target.value);
+        const now = new Date();
+
+        if (newYear > now.getFullYear()) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'ไม่สามารถดูข้อมูลล่วงหน้าได้',
+                text: 'กรุณาเลือกปีปัจจุบันหรือย้อนหลัง',
+                confirmButtonColor: '#1b5e20'
+            });
+            e.target.value = calendarSelectedYear;
+            return;
+        }
+
+        calendarSelectedYear = newYear;
+
+        // ถ้าเปลี่ยนปีแล้ว เดือนที่เลือกอยู่เป็นอนาคต ให้ปรับเป็นเดือนปัจจุบัน
+        if (calendarSelectedYear === now.getFullYear() && calendarSelectedMonth > now.getMonth()) {
+            calendarSelectedMonth = now.getMonth();
+            monthSelect.value = calendarSelectedMonth;
+        }
+
         loadStatistics();
     });
 
