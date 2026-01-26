@@ -190,9 +190,128 @@ function setupEventListeners() {
     }
 }
 
+// ===== ฟังก์ชันอัปเดต Submission Stepper (New) =====
+function updateSubmissionStepper(step) {
+    const steps = document.querySelectorAll('.submission-stepper .step-item');
+    steps.forEach((s, index) => {
+        if (index + 1 === step) {
+            s.classList.add('active');
+        } else {
+            s.classList.remove('active');
+        }
+    });
+
+    // ถ้าเข้าสู่ขั้นตอนที่ 4 (ส่งแล้ว)
+    if (step === 4) {
+        steps.forEach(s => s.classList.remove('active'));
+        const lastStep = document.getElementById('step4');
+        if (lastStep) lastStep.classList.add('active');
+    }
+}
+
+// ===== ฟังก์ชันควบคุมการเปลี่ยนหน้าฟอร์ม (New) =====
+function goToStep(step) {
+    // ตรวจสอบความถูกต้องของข้อมูลก่อนไปหน้าถัดไป (เฉพาะเมื่อกด 'ถัดไป')
+    const currentStepDiv = document.querySelector('.form-step.active');
+    const currentStepNum = parseInt(currentStepDiv.id.replace('formStep', ''));
+
+    if (step > currentStepNum) {
+        // ค้นหา input ใน step ปัจจุบัน
+        const inputs = currentStepDiv.querySelectorAll('input, select, textarea');
+        let isValid = true;
+
+        try {
+            inputs.forEach(input => {
+                if (!input.checkValidity()) {
+                    // หาชื่อฟิลด์จาก Label
+                    const label = input.closest('div').querySelector('.form-label');
+                    const fieldName = label ? label.textContent.replace('*', '').trim() : "ข้อมูลบางส่วน";
+
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'กรุณากรอกข้อมูลให้ครบถ้วน',
+                        text: `โปรดระบุ "${fieldName}" ก่อนไปขั้นตอนถัดไป`,
+                        confirmButtonColor: '#1b5e20',
+                        confirmButtonText: 'รับทราบ',
+                        showClass: {
+                            popup: 'animate__animated animate__shakeX'
+                        }
+                    });
+
+                    isValid = false;
+                    input.classList.add('is-invalid'); // เพิ่มคลาสสีแดงให้ input
+
+                    // ลบคลาสสีแดงเมื่อมีการพิมพ์
+                    input.addEventListener('input', function () {
+                        this.classList.remove('is-invalid');
+                    }, { once: true });
+
+                    throw 'Validation Failed'; // หยุดการตรวจสอบที่ตัวแรกเพื่อไม่ให้ Swal เด้งรัวๆ
+                }
+            });
+        } catch (e) {
+            if (e === 'Validation Failed') return;
+        }
+    }
+
+    // ซ่อนทุกหน้า และแสดงหน้าที่ต้องการ
+    document.querySelectorAll('.form-step').forEach(div => {
+        div.classList.remove('active');
+    });
+    const targetStepDiv = document.getElementById(`formStep${step}`);
+    if (targetStepDiv) targetStepDiv.classList.add('active');
+
+    // อัปเดต Stepper
+    updateSubmissionStepper(step);
+
+    // ถ้าไปที่ Step 3 (ตรวจสอบข้อมูล) ให้สรุปผล
+    if (step === 3) {
+        summaryData();
+    }
+
+    // เลื่อนหน้าจอกลับไปด้านบนของฟอร์ม
+    const formSection = document.getElementById('complaint-form');
+    if (formSection) {
+        window.scrollTo({
+            top: formSection.offsetTop - 100,
+            behavior: 'smooth'
+        });
+    }
+}
+
+// ===== ฟังก์ชันสรุปข้อมูลก่อนส่ง (New) =====
+function summaryData() {
+    const title = document.getElementById('title').value;
+    let category = document.getElementById('category').value;
+    if (category === 'อื่นๆ') category = document.getElementById('otherCategory').value;
+
+    const location = document.getElementById('location').value;
+
+    const isAnonymous = document.getElementById('anonymous').checked;
+    const reporterName = isAnonymous ? "ไม่ระบุตัวตน" : document.getElementById('reporterName').value;
+
+    document.getElementById('summaryTitle').textContent = title || '-';
+    document.getElementById('summaryCategory').textContent = category || '-';
+    document.getElementById('summaryLocation').textContent = location || '-';
+    document.getElementById('summaryReporter').textContent = reporterName || '-';
+}
+
 // ===== ฟังก์ชันจัดการฟอร์มแจ้งเรื่อง =====
 async function handleComplaintSubmit(e) {
     e.preventDefault();
+
+    // บังคับให้กด ยอมรับนโยบายความเป็นส่วนตัว
+    const privacyConsent = document.getElementById('privacyConsent');
+    if (privacyConsent && !privacyConsent.checked) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'กรุณายอมรับนโยบาย',
+            text: 'คุณต้องกดยอมรับนโยบายความเป็นส่วนตัวก่อนส่งคำร้องเรียน',
+            confirmButtonColor: '#1b5e20',
+            confirmButtonText: 'ตกลง'
+        });
+        return;
+    }
 
     // แสดง Popup ยืนยันการยินยอมข้อมูลส่วนบุคคล
     const confirmResult = await Swal.fire({
@@ -254,6 +373,9 @@ async function handleComplaintSubmit(e) {
     if (!confirmResult.isConfirmed) {
         return;
     }
+
+    // อัปเดต stepper เป็นขั้นตอนที่ 4
+    updateSubmissionStepper(4);
 
     // Disable ปุ่ม submit
     const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -374,6 +496,9 @@ async function handleComplaintSubmit(e) {
         document.getElementById('reporterNameGroup').style.opacity = '1';
         document.getElementById('reporterName').disabled = false;
         document.getElementById('privacyConsent').checked = false;
+
+        // กลับไป Step 1 หลังส่งสำเร็จ (หรือปล่อยไว้หน้า Success Modal)
+        goToStep(1);
 
     } catch (error) {
         console.error("Error submitting complaint:", error);
@@ -614,8 +739,15 @@ async function handleTrackStatus() {
 
 // ===== ฟังก์ชันอัพเดต Progress Bar =====
 function updateProgressBar(status) {
+    const container = document.querySelector('.progress-container');
     const steps = document.querySelectorAll('.step');
     const progressLine = document.querySelector('.progress-line');
+
+    if (!container) return;
+
+    // รีเซ็ตคลาสสถานะเดิมบน container
+    container.classList.remove('status-waiting', 'status-pending', 'status-accepted', 'status-in-progress', 'status-resolved', 'status-rejected');
+    container.classList.add(`status-${status}`);
 
     // รีเซ็ตทุกขั้นตอน
     steps.forEach(step => {
