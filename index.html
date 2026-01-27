@@ -247,18 +247,15 @@
                                         <!-- ชื่อ-นามสกุล -->
                                         <div class="col-md-6 mb-3">
                                             <div id="reporterNameGroup">
-                                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                                    <label for="reporterName"
-                                                        class="form-label mb-0">ชื่อ-นามสกุล</label>
-                                                    <div class="form-check mb-0">
-                                                        <input class="form-check-input" type="checkbox" id="anonymous">
-                                                        <label class="form-check-label small" for="anonymous">
-                                                            ไม่ระบุตัวตน
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                                <input type="text" class="form-control" id="reporterName"
+                                                <label for="reporterName" class="form-label">ชื่อ-นามสกุล</label>
+                                                <input type="text" class="form-control mb-3" id="reporterName"
                                                     placeholder="ระบุชื่อของคุณ" required>
+                                                <div class="form-check custom-checkbox-lg">
+                                                    <input class="form-check-input" type="checkbox" id="anonymous">
+                                                    <label class="form-check-label ms-2" for="anonymous">
+                                                        ไม่ระบุตัวตน (ส่งข้อมูลแบบปกปิดชื่อ)
+                                                    </label>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -278,8 +275,9 @@
 
                                         <!-- อัปโหลดรูปภาพ -->
                                         <div class="col-12 mb-4">
-                                            <label for="imageUpload" class="form-label">อัปโหลดรูปภาพหลักฐาน
-                                                (เลือกได้ไม่เกิน 3 รูป, รวมไม่เกิน 5MB)</label>
+                                            <label for="imageUpload" class="form-label">อัปโหลดรูปภาพหลักฐาน (ไม่บังคับ)
+                                                <br><small class="text-muted">(เลือกได้ไม่เกิน 3 รูป, รวมไม่เกิน
+                                                    5MB)</small></label>
                                             <div class="upload-container border-2 border-dashed rounded-4 p-4 text-center bg-light shadow-sm"
                                                 style="border: 2px dashed #cbd5e1; cursor: pointer;">
                                                 <input class="form-control d-none" type="file" id="imageUpload"
@@ -351,6 +349,12 @@
                                                 <span class="summary-value" id="summaryReporter">-</span>
                                             </div>
                                         </div>
+                                    </div>
+
+                                    <!-- ข้อความเตือนก่อนส่ง -->
+                                    <div class="alert alert-warning border-0 rounded-4 p-3 mb-4 text-center">
+                                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                        <strong>กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนส่งข้อมูล</strong>
                                     </div>
 
                                     <!-- ยอมรับความเป็นส่วนตัว -->
