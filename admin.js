@@ -10,7 +10,7 @@ let sessionInterval = null; // สำหรับเช็คเวลาหม�
 let userProfile = null; // สำหรับเก็บข้อมูลโปรไฟล์ผู้ใช้ปัจจุบัน
 let calendarSelectedMonth = new Date().getMonth(); // เดือนที่เลือกในปฏิทิน (0-11)
 let calendarSelectedYear = new Date().getFullYear(); // ปีที่เลือกในปฏิทิน
-const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 นาที (หน่วยเป็นมิลลิวินาที)
+const SESSION_TIMEOUT = 10 * 60 * 1000; // 10 นาที (หน่วยเป็นมิลลิวินาที)
 
 // รายชื่อตำแหน่งที่กำหนด
 const POSITIONS = [
@@ -268,49 +268,71 @@ async function handleAdminLogout() {
 }
 
 // ===== ระบบจัดการเซสชันแบบ Inactivity (ขยับแล้วต่อเวลาให้เอง) =====
-let inactivityTimeout = null;
+let inactivityInterval = null;
 
 function startSessionTimer() {
     // ล้างของเดิมก่อน
     stopSessionTimer();
 
-    // เริ่มจับเวลาใหม่
-    resetSessionTimer();
+    // เริ่มต้นบันทึกเวลาล่าสุด
+    localStorage.setItem('adminLastActivity', Date.now());
 
     // เพิ่ม Event Listeners สำหรับดักจับการขยับหรือใช้งานหน้าจอ
-    const events = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
+    const events = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
     events.forEach(event => {
         window.addEventListener(event, resetSessionTimer);
     });
+
+    // ใช้ Visibility Change เพื่อเช็คทันทีที่ผู้ใช้กลับมาที่แท็บ
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // ตรวจสอบทุกๆ 1 นาที (60 วินาที) เผื่อ browser หยุด setTimeout ใน background
+    inactivityInterval = setInterval(checkInactivity, 60000);
+
+    // และเช็คทันที
+    checkInactivity();
 }
 
 function resetSessionTimer() {
-    // ถ้าไม่มีผู้ใช้ล็อกอินอยู่ ไม่ต้องจับเวลา
+    // ถ้าไม่มีผู้ใช้ล็อกอินอยู่ ไม่ต้องทำอะไร
     if (!currentUser) return;
 
-    // เคลียร์ Timeout เดิม
-    if (inactivityTimeout) {
-        clearTimeout(inactivityTimeout);
-    }
+    // อัปเดตเวลาล่าสุดใน localStorage
+    localStorage.setItem('adminLastActivity', Date.now());
+}
 
-    // ตั้งเวลาใหม่ (15 นาที)
-    inactivityTimeout = setTimeout(() => {
+function checkInactivity() {
+    if (!currentUser) return;
+
+    const lastActivity = parseInt(localStorage.getItem('adminLastActivity') || Date.now());
+    const now = Date.now();
+
+    if (now - lastActivity >= SESSION_TIMEOUT) {
         handleSessionTimeout();
-    }, SESSION_TIMEOUT);
+    }
+}
+
+function handleVisibilityChange() {
+    if (document.visibilityState === 'visible') {
+        checkInactivity();
+    }
 }
 
 function stopSessionTimer() {
-    // เคลียร์ Timeout
-    if (inactivityTimeout) {
-        clearTimeout(inactivityTimeout);
-        inactivityTimeout = null;
+    // เคลียร์ Interval
+    if (inactivityInterval) {
+        clearInterval(inactivityInterval);
+        inactivityInterval = null;
     }
 
     // ลบ Event Listeners ออก
-    const events = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
+    const events = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
     events.forEach(event => {
         window.removeEventListener(event, resetSessionTimer);
     });
+
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    localStorage.removeItem('adminLastActivity');
 }
 
 async function handleSessionTimeout() {
@@ -327,7 +349,7 @@ async function handleSessionTimeout() {
         await Swal.fire({
             icon: 'info',
             title: 'เซสชันหมดอายุ',
-            text: 'ระบบได้ออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งานเกิน 15 นาที เพื่อความปลอดภัยของข้อมูล',
+            text: 'ระบบได้ออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งานเกิน 10 นาที เพื่อความปลอดภัยของข้อมูล',
             confirmButtonText: 'ตกลง',
             confirmButtonColor: '#1b5e20',
             allowOutsideClick: false
@@ -766,11 +788,23 @@ function loadComplaintsTable() {
                 const id = data.id;
                 const isLocked = data.status === 'resolved' || data.status === 'rejected';
 
-                // แปลงวันที่
+                // แปลงวันที่และเวลาแบบพรีเมียม
                 let dateStr = '-';
                 if (data.createdAt) {
                     const date = data.createdAt.toDate();
-                    dateStr = date.toLocaleDateString('th-TH');
+                    const dayStr = date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+                    const timeStr = date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+
+                    dateStr = `
+                        <div class="admin-date-v2">
+                            <div class="admin-date-badge">
+                                <i class="bi bi-calendar3"></i> ${dayStr}
+                            </div>
+                            <div class="admin-time-badge">
+                                <i class="bi bi-clock"></i> ${timeStr}
+                            </div>
+                        </div>
+                    `;
                 }
 
                 // สร้างแถวตาราง
@@ -796,8 +830,8 @@ function loadComplaintsTable() {
                     <td data-label="สถานที่">
                         <div class="small fw-bold text-dark table-truncate-location" title="${data.location || '-'}">${data.location || '-'}</div>
                     </td>
-                    <td data-label="วันที่พบปัญหา" class="small">
-                        ${data.incidentDate ? new Date(data.incidentDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '-'}
+                    <td data-label="วันที่พบปัญหา">
+                        ${data.incidentDate ? `<div class="incident-date-pill"><i class="bi bi-calendar-event"></i> ${new Date(data.incidentDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })}</div>` : '-'}
                     </td>
                     <td data-label="ผู้ร้องเรียน">
                         <div class="d-flex align-items-center justify-content-end justify-content-md-start">
@@ -811,7 +845,7 @@ function loadComplaintsTable() {
                             </div>
                         </div>
                     </td>
-                    <td class="small text-muted" data-label="วันที่แจ้ง">${dateStr}</td>
+                    <td data-label="วันที่แจ้ง">${dateStr}</td>
                     <td data-label="สถานะ">
                         <span class="status-badge status-${data.status || 'pending'}">
                             <i class="bi bi-dot fs-4"></i>${getStatusText(data.status)}
@@ -1724,6 +1758,7 @@ async function handleAddUser() {
                 
                 <label class="form-label">ตำแหน่ง</label>
                 <select id="swal-input4" class="form-select mb-3">
+                    <option value="" disabled selected>-- เลือกตำแหน่ง --</option>
                     ${POSITIONS.map(p => `<option value="${p}">${p}</option>`).join('')}
                 </select>
             </div>`,
@@ -1744,6 +1779,10 @@ async function handleAddUser() {
             }
             if (!displayName || !password) {
                 Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบถ้วน');
+                return false;
+            }
+            if (!position) {
+                Swal.showValidationMessage('กรุณาเลือกตำแหน่ง');
                 return false;
             }
             if (password.length < 6) {
