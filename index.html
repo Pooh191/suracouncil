@@ -166,14 +166,16 @@
                                     <div class="row">
                                         <!-- หัวข้อเรื่อง -->
                                         <div class="col-md-12 mb-3">
-                                            <label for="title" class="form-label">เรื่องที่ต้องการแจ้ง</label>
+                                            <label for="title" class="form-label">เรื่องที่ต้องการแจ้ง <span
+                                                    class="required-dot">*</span></label>
                                             <input type="text" class="form-control" id="title"
                                                 placeholder="ระบุสิ่งที่ต้องการแจ้งสั้นๆ" required>
                                         </div>
 
                                         <!-- ประเภทเรื่อง -->
                                         <div class="col-md-6 mb-3">
-                                            <label for="category" class="form-label">ประเภทเรื่อง</label>
+                                            <label for="category" class="form-label">ประเภทเรื่อง <span
+                                                    class="required-dot">*</span></label>
                                             <select class="form-select" id="category" required>
                                                 <option value="" selected disabled>เลือกประเภทเรื่อง</option>
                                                 <option value="อาคารสถานที่">อาคารสถานที่</option>
@@ -193,7 +195,8 @@
 
                                         <!-- ประเภทผู้แจ้ง -->
                                         <div class="col-md-6 mb-3">
-                                            <label for="reporterType" class="form-label">ประเภทผู้แจ้ง</label>
+                                            <label for="reporterType" class="form-label">ประเภทผู้แจ้ง <span
+                                                    class="required-dot">*</span></label>
                                             <select class="form-select" id="reporterType" required>
                                                 <option value="" selected disabled>เลือกประเภทผู้แจ้ง</option>
                                                 <option value="นักเรียน">นักเรียน</option>
@@ -230,14 +233,16 @@
                                     <div class="row">
                                         <!-- สถานที่/อาคารที่เกิดปัญหา -->
                                         <div class="col-md-6 mb-3">
-                                            <label for="location" class="form-label">สถานที่ / อาคารที่เกิดปัญหา</label>
+                                            <label for="location" class="form-label">สถานที่ / อาคารที่เกิดปัญหา <span
+                                                    class="required-dot">*</span></label>
                                             <input type="text" class="form-control" id="location"
                                                 placeholder="เช่น อาคาร 3 ชั้น 2 หรือ สนามฟุตบอล" required>
                                         </div>
 
                                         <!-- วันที่ที่เกิดปัญหา -->
                                         <div class="col-md-6 mb-3">
-                                            <label for="incidentDate" class="form-label">วันที่พบปัญหา</label>
+                                            <label for="incidentDate" class="form-label">วันที่พบปัญหา <span
+                                                    class="required-dot">*</span></label>
                                             <div class="date-input-group">
                                                 <i class="bi bi-calendar-check"></i>
                                                 <input type="date" class="form-control" id="incidentDate" required>
@@ -247,14 +252,25 @@
                                         <!-- ชื่อ-นามสกุล -->
                                         <div class="col-md-6 mb-3">
                                             <div id="reporterNameGroup">
-                                                <label for="reporterName" class="form-label">ชื่อ-นามสกุล</label>
+                                                <label for="reporterName" class="form-label">ชื่อ-นามสกุล <span
+                                                        class="required-dot">*</span></label>
                                                 <input type="text" class="form-control mb-3" id="reporterName"
                                                     placeholder="ระบุชื่อของคุณ" required>
-                                                <div class="form-check custom-checkbox-lg">
-                                                    <input class="form-check-input" type="checkbox" id="anonymous">
-                                                    <label class="form-check-label ms-2" for="anonymous">
-                                                        ไม่ระบุตัวตน (ส่งข้อมูลแบบปกปิดชื่อ)
-                                                    </label>
+
+                                                <!-- Premium Anonymous Toggle -->
+                                                <div class="anonymous-card" id="anonymousToggle">
+                                                    <div class="form-check p-0 m-0">
+                                                        <input class="form-check-input d-none" type="checkbox"
+                                                            id="anonymous">
+                                                    </div>
+                                                    <div class="status-icon">
+                                                        <i class="bi bi-eye"></i>
+                                                    </div>
+                                                    <div class="toggle-info">
+                                                        <span class="toggle-title">ส่งข้อมูลแบบไม่ระบุตัวตน</span>
+                                                        <span class="toggle-desc">ปกปิดชื่อของคุณจากระบบ
+                                                            (ใช้สำหรับเรื่องที่ต้องการความลับ)</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -269,7 +285,8 @@
 
                                         <!-- รายละเอียด -->
                                         <div class="col-12 mb-3">
-                                            <label for="details" class="form-label">รายละเอียด</label>
+                                            <label for="details" class="form-label">รายละเอียด <span
+                                                    class="required-dot">*</span></label>
                                             <textarea class="form-control" id="details" rows="5" required></textarea>
                                         </div>
 
