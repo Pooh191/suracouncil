@@ -465,6 +465,20 @@ span.flatpickr-weekday {
     border-color: var(--primary-green);
 }
 
+.custom-checkbox-lg .form-check-input {
+    width: 1.5rem;
+    height: 1.5rem;
+    cursor: pointer;
+    border: 2px solid #cbd5e1;
+}
+
+.custom-checkbox-lg .form-check-label {
+    padding-top: 2px;
+    font-size: 1.1rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
 /* ===== Tracking Section ===== */
 .tracking-card {
     border-radius: 25px;
