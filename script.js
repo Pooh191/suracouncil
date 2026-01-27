@@ -102,13 +102,16 @@ function setupEventListeners() {
 
     if (anonymousCheckbox) {
         anonymousCheckbox.addEventListener('change', function () {
+            const nameLabel = reporterNameGroup.querySelector('label[for="reporterName"]');
             if (this.checked) {
-                reporterNameGroup.style.opacity = '0.5';
+                if (nameLabel) nameLabel.style.opacity = '0.5';
+                reporterNameInput.style.opacity = '0.5';
                 reporterNameInput.disabled = true;
                 reporterNameInput.value = '';
                 reporterNameInput.required = false;
             } else {
-                reporterNameGroup.style.opacity = '1';
+                if (nameLabel) nameLabel.style.opacity = '1';
+                reporterNameInput.style.opacity = '1';
                 reporterNameInput.disabled = false;
                 reporterNameInput.required = true;
                 reporterNameInput.focus();
@@ -344,7 +347,10 @@ async function handleComplaintSubmit(e) {
                     </p>
                 </div>
 
-                <p style="margin-top: 20px; color: #64748b; font-size: 0.9rem; text-align: center;">
+                <p style="margin-top: 20px; color: #dc3545; font-size: 1rem; text-align: center; font-weight: bold;">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i> กรุณาตรวจสอบข้อมูลก่อนส่งข้อมูล
+                </p>
+                <p style="margin-top: 5px; color: #64748b; font-size: 0.9rem; text-align: center;">
                     กรุณายืนยันว่าท่านได้อ่านและเข้าใจนโยบายความเป็นส่วนตัวแล้ว
                 </p>
             </div>
