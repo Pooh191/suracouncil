@@ -363,6 +363,77 @@ body {
     transform: translateY(-2px);
 }
 
+/* Required Dot */
+.required-dot {
+    color: #ef4444;
+    margin-left: 4px;
+    font-weight: bold;
+}
+
+/* Anonymous Toggle Card */
+.anonymous-card {
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 20px;
+    padding: 15px 20px;
+    transition: var(--transition);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-top: 10px;
+    position: relative;
+    overflow: hidden;
+}
+
+.anonymous-card:hover {
+    border-color: var(--secondary-green);
+    background: #f0fdf4;
+}
+
+.anonymous-card.active {
+    border-color: var(--primary-green);
+    background: #f0fdf4;
+    box-shadow: 0 10px 15px -3px rgba(27, 94, 32, 0.1);
+}
+
+.anonymous-card input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 2px solid #cbd5e1;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.anonymous-card .toggle-info {
+    flex: 1;
+}
+
+.anonymous-card .toggle-title {
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 2px;
+    display: block;
+}
+
+.anonymous-card .toggle-desc {
+    font-size: 0.85rem;
+    color: #64748b;
+    display: block;
+}
+
+.anonymous-card .status-icon {
+    font-size: 1.5rem;
+    color: #94a3b8;
+    transition: var(--transition);
+}
+
+.anonymous-card.active .status-icon {
+    color: var(--primary-green);
+    transform: scale(1.1);
+}
+
 /* ===== Premium Date Picker & Form Enhancements ===== */
 .date-input-group {
     position: relative;
@@ -1104,6 +1175,64 @@ span.flatpickr-weekday {
 .status-badge:hover {
     transform: translateY(-2px);
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+/* Premium Date/Time Display for Admin Table */
+.admin-date-v2 {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.admin-date-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f1f5f9;
+    padding: 6px 12px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    color: #334155;
+    font-size: 0.9rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.admin-date-badge i {
+    color: var(--primary-green);
+    font-size: 1rem;
+}
+
+.admin-time-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f0fdf4;
+    padding: 2px 10px;
+    border-radius: 50px;
+    border: 1px solid #bbf7d0;
+    color: #166534;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-top: 2px;
+}
+
+.admin-time-badge i {
+    font-size: 0.85rem;
+}
+
+.incident-date-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff9c4;
+    color: #854d0e;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px solid #fde68a;
 }
 
 /* ===== Footer Styles ===== */
@@ -2507,11 +2636,13 @@ span.flatpickr-weekday {
 @media (max-width: 1200px) {
     .toolbox-header {
         align-items: stretch !important;
+        gap: 1.5rem !important;
     }
 
     .tool-area {
         flex-direction: column;
         align-items: stretch !important;
+        gap: 1.5rem !important;
     }
 
     .search-box-v2 {
@@ -2519,15 +2650,29 @@ span.flatpickr-weekday {
     }
 
     .filter-group {
-        justify-content: space-between;
+        gap: 1rem !important;
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 768px) {
+    .filter-group {
+        flex-direction: column;
+        gap: 12px !important;
     }
 
     .filter-item {
-        flex: 1;
+        width: 100%;
+    }
+
+    .admin-filter-select-v2 {
+        width: 100% !important;
     }
 
     .action-panel {
-        justify-content: center;
+        width: 100%;
+        justify-content: space-around;
+        padding: 10px !important;
     }
 }
 
@@ -3281,77 +3426,78 @@ span.flatpickr-weekday {
         overflow-x: visible;
     }
 
+    .calendar-header-grid {
+        font-size: 0.75rem;
+        padding-bottom: 8px;
+        margin-bottom: 10px;
+    }
+
+    .calendar-body-grid {
+        gap: 4px;
+    }
+
     .calendar-day {
-        min-height: 65px;
-        padding: 5px;
+        min-height: 55px;
+        /* Reduced from 65px */
+        padding: 4px;
+        border-radius: 8px;
+    }
+
+    .day-number {
+        font-size: 0.75rem;
     }
 
     .complaint-count-badge {
-        min-width: 26px;
-        height: 26px;
-        font-size: 0.8rem;
-    }
-
-    .calendar-header-grid {
-        font-size: 0.7rem;
-        padding-bottom: 8px;
-    }
-
-    .calendar-card-header {
-        padding: 15px 12px !important;
-        flex-direction: row !important;
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-
-    .calendar-card-header .d-flex.align-items-center:first-child {
-        width: 100%;
-    }
-
-    .calendar-nav {
-        width: 100%;
-        justify-content: flex-start;
-        gap: 5px !important;
-    }
-
-    .calendar-nav select {
-        padding-left: 10px !important;
-        padding-right: 25px !important;
-        font-size: 0.8rem !important;
-    }
-
-    .calendar-nav #calendarMonthSelect {
-        width: 110px !important;
-    }
-
-    .calendar-nav #calendarYearSelect {
-        width: 85px !important;
-    }
-
-    .calendar-card-header h5 {
-        font-size: 1rem;
-        line-height: 1.2;
-    }
-
-    .calendar-card-header p {
+        min-width: 22px;
+        height: 22px;
         font-size: 0.75rem;
     }
 
-    .calendar-header-grid div {
-        font-size: 0.75rem;
-    }
-}
-
-@media (max-width: 576px) {
     .calendar-card-header {
-        flex-direction: column;
+        padding: 15px !important;
+        flex-direction: column !important;
         align-items: flex-start !important;
         gap: 15px;
     }
 
     .calendar-nav {
         width: 100%;
+        display: flex;
         justify-content: space-between;
+        gap: 8px !important;
+    }
+
+    .calendar-nav select {
+        flex: 1;
+        padding: 8px 25px 8px 10px !important;
+        font-size: 0.85rem !important;
+        height: 40px !important;
+    }
+
+    #calendarMonthSelect {
+        width: auto !important;
+        min-width: 100px;
+    }
+
+    #calendarYearSelect {
+        width: auto !important;
+        min-width: 80px;
+    }
+
+    .calendar-today-btn {
+        width: 40px;
+        height: 40px;
+        flex-shrink: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .calendar-day {
+        min-height: 48px;
+    }
+
+    .calendar-header-grid {
+        font-size: 0.65rem;
     }
 }
 
