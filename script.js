@@ -97,19 +97,39 @@ function setupEventListeners() {
 
     // จัดการตัวเลือกไม่ระบุตัวตน
     const anonymousCheckbox = document.getElementById('anonymous');
+    const anonymousToggle = document.getElementById('anonymousToggle');
     const reporterNameGroup = document.getElementById('reporterNameGroup');
     const reporterNameInput = document.getElementById('reporterName');
 
-    if (anonymousCheckbox) {
+    if (anonymousCheckbox && anonymousToggle) {
+        // เมื่อคลิกที่การ์ด ให้ติ๊ก checkbox
+        anonymousToggle.addEventListener('click', function () {
+            anonymousCheckbox.checked = !anonymousCheckbox.checked;
+            // เรียกใช้ event change ของ checkbox
+            anonymousCheckbox.dispatchEvent(new Event('change'));
+        });
+
         anonymousCheckbox.addEventListener('change', function () {
             const nameLabel = reporterNameGroup.querySelector('label[for="reporterName"]');
+            const statusIcon = anonymousToggle.querySelector('.status-icon i');
+
             if (this.checked) {
+                anonymousToggle.classList.add('active');
+                if (statusIcon) {
+                    statusIcon.classList.remove('bi-eye');
+                    statusIcon.classList.add('bi-eye-slash-fill');
+                }
                 if (nameLabel) nameLabel.style.opacity = '0.5';
                 reporterNameInput.style.opacity = '0.5';
                 reporterNameInput.disabled = true;
                 reporterNameInput.value = '';
                 reporterNameInput.required = false;
             } else {
+                anonymousToggle.classList.remove('active');
+                if (statusIcon) {
+                    statusIcon.classList.remove('bi-eye-slash-fill');
+                    statusIcon.classList.add('bi-eye');
+                }
                 if (nameLabel) nameLabel.style.opacity = '1';
                 reporterNameInput.style.opacity = '1';
                 reporterNameInput.disabled = false;
