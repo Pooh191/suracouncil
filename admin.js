@@ -10,7 +10,7 @@ let sessionInterval = null; // สำหรับเช็คเวลาหม�
 let userProfile = null; // สำหรับเก็บข้อมูลโปรไฟล์ผู้ใช้ปัจจุบัน
 let calendarSelectedMonth = new Date().getMonth(); // เดือนที่เลือกในปฏิทิน (0-11)
 let calendarSelectedYear = new Date().getFullYear(); // ปีที่เลือกในปฏิทิน
-const SESSION_TIMEOUT = 5 * 60 * 1000; // 5 นาที (หน่วยเป็นมิลลิวินาที)
+const SESSION_TIMEOUT = 10 * 60 * 1000; // 10 นาที (หน่วยเป็นมิลลิวินาที)
 
 // รายชื่อตำแหน่งที่กำหนด
 const POSITIONS = [
@@ -263,7 +263,12 @@ async function handleAdminLogout() {
 
     } catch (error) {
         console.error("Logout error:", error);
-        alert("ออกจากระบบไม่สำเร็จ: " + error.message);
+        Swal.fire({
+            icon: 'error',
+            title: 'ผิดพลาด',
+            text: "ออกจากระบบไม่สำเร็จ: " + error.message,
+            confirmButtonColor: '#d33'
+        });
     }
 }
 
@@ -349,7 +354,7 @@ async function handleSessionTimeout() {
         await Swal.fire({
             icon: 'info',
             title: 'เซสชันหมดอายุ',
-            text: 'ระบบได้ออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งานเกิน 5 นาที เพื่อความปลอดภัยของข้อมูล',
+            text: 'ระบบได้ออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งานเกิน 10 นาที เพื่อความปลอดภัยของข้อมูล',
             confirmButtonText: 'ตกลง',
             confirmButtonColor: '#1b5e20',
             allowOutsideClick: false
@@ -1324,30 +1329,28 @@ async function handleDeleteComplaint(e) {
 }
 
 // ===== ฟังก์ชันแจ้งเตือนใน Admin =====
+// ===== ฟังก์ชันแจ้งเตือนใน Admin (Updated to SweetAlert2) =====
 function showAdminAlert(message, type = 'info') {
-    // สร้างแจ้งเตือนชั่วคราว
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-    alertDiv.style.cssText = `
-        top: 80px;
-        right: 20px;
-        z-index: 9999;
-        min-width: 300px;
-    `;
-    alertDiv.innerHTML = `
-        <i class="bi ${type === 'success' ? 'bi-check-circle' : 'bi-exclamation-triangle'} me-2"></i>
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
+    // แปลงชนิด alert เป็น icon ของ SweetAlert2
+    let icon = type;
+    if (type === 'danger') icon = 'error';
+    if (type === 'primary') icon = 'info';
 
-    document.body.appendChild(alertDiv);
-
-    // ลบแจ้งเตือนหลังจาก 3 วินาที
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.remove();
-        }
-    }, 3000);
+    Swal.fire({
+        icon: icon,
+        title: message,
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        showClass: {
+            popup: 'animate__animated animate__bounceIn' // เอฟเฟกต์เด้งเข้า
+        },
+        hideClass: {
+            popup: 'animate__animated animate__fadeOutUp'
+        },
+        toast: true,
+        position: 'top-end'
+    });
 }
 
 // ===== ฟังก์ชันแสดงผลกราฟ =====
