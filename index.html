@@ -114,6 +114,85 @@
         </div>
     </section>
 
+    <!-- Public Statistics Section -->
+    <div class="container mt-5">
+        <div class="d-flex align-items-center mb-4">
+            <span class="premium-title-vbar me-3"></span>
+            <h5 class="mb-0 fw-bold">สถานะการดำเนินงานทั้งหมด (Work Status)</h5>
+        </div>
+        <div class="row g-3 mb-5">
+            <!-- Cards summary -->
+            <div class="col-lg-2 col-md-4 col-6">
+                <div class="card stat-card shadow-sm border-0 h-100"
+                    style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white;">
+                    <div class="card-body p-3">
+                        <div class="text-center">
+                            <h6 class="text-white-50 mb-1 small">ทั้งหมด</h6>
+                            <h3 class="fw-bold mb-0" id="publicTotal">0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-6">
+                <div class="card stat-card shadow-sm border-0 h-100"
+                    style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); color: white;">
+                    <div class="card-body p-3">
+                        <div class="text-center">
+                            <h6 class="text-white-50 mb-1 small">รอรับเรื่อง</h6>
+                            <h3 class="fw-bold mb-0" id="publicWaiting">0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-6">
+                <div class="card stat-card shadow-sm border-0 h-100"
+                    style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: white;">
+                    <div class="card-body p-3">
+                        <div class="text-center">
+                            <h6 class="text-white-50 mb-1 small">รับเรื่องแล้ว</h6>
+                            <h3 class="fw-bold mb-0" id="publicAccepted">0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-6">
+                <div class="card stat-card shadow-sm border-0 h-100"
+                    style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white;">
+                    <div class="card-body p-3">
+                        <div class="text-center">
+                            <h6 class="text-white-50 mb-1 small">ดำเนินการ</h6>
+                            <h3 class="fw-bold mb-0" id="publicInProgress">0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-6">
+                <div class="card stat-card shadow-sm border-0 h-100"
+                    style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white;">
+                    <div class="card-body p-3">
+                        <div class="text-center">
+                            <h6 class="text-white-50 mb-1 small">เสร็จสิ้น</h6>
+                            <h3 class="fw-bold mb-0" id="publicResolved">0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-6">
+                <div class="card stat-card shadow-sm border-0 h-100"
+                    style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white;">
+                    <div class="card-body p-3">
+                        <div class="text-center">
+                            <h6 class="text-white-50 mb-1 small">ไม่รับเรื่อง</h6>
+                            <h3 class="fw-bold mb-0" id="publicRejected">0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
     <!-- Complaint Form Section -->
     <section id="complaint-form" class="section-padding">
         <div class="container">
@@ -405,6 +484,8 @@
         </div>
     </section>
 
+
+
     <!-- Tracking Section -->
     <section id="tracking" class="section-padding bg-light">
         <div class="container">
@@ -614,6 +695,7 @@
         </div>
         </div>
     </section>
+
 
 
 
