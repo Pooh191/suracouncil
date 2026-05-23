@@ -15,7 +15,66 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // แสดง Developer Announcement Popup
     showDeveloperAnnouncement();
+
+    // โหลดสถิติหน้าแรกแบบ Real-time
+    loadPublicStatistics();
 });
+
+// ===== ฟังก์ชันโหลดสถิติหน้าแรก (Real-time) =====
+function loadPublicStatistics() {
+    const totalEl = document.getElementById('publicTotal');
+    const waitingEl = document.getElementById('publicWaiting');
+    const acceptedEl = document.getElementById('publicAccepted');
+    const inProgressEl = document.getElementById('publicInProgress');
+    const resolvedEl = document.getElementById('publicResolved');
+    const rejectedEl = document.getElementById('publicRejected');
+
+    if (!totalEl) return; // ถ้าไม่มี element (เช่น อยู่หน้าอื่น) ให้หยุด
+
+    // ใช้ onSnapshot เพื่อให้ข้อมูลอัปเดตแบบ Real-time
+    complaintsCollection.onSnapshot(snapshot => {
+        let stats = {
+            total: 0,
+            waiting: 0,
+            accepted: 0,
+            inProgress: 0,
+            resolved: 0,
+            rejected: 0
+        };
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            stats.total++;
+
+            switch (data.status) {
+                case 'waiting':
+                case 'pending':
+                    stats.waiting++;
+                    break;
+                case 'accepted':
+                    stats.accepted++;
+                    break;
+                case 'in-progress':
+                    stats.inProgress++;
+                    break;
+                case 'resolved':
+                    stats.resolved++;
+                    break;
+                case 'rejected':
+                    stats.rejected++;
+                    break;
+            }
+        });
+
+        // อัปเดตตัวเลขในหน้าเว็บ
+        totalEl.textContent = stats.total;
+        waitingEl.textContent = stats.waiting;
+        acceptedEl.textContent = stats.accepted;
+        inProgressEl.textContent = stats.inProgress;
+        resolvedEl.textContent = stats.resolved;
+        rejectedEl.textContent = stats.rejected;
+    });
+}
 
 // ===== ตั้งค่า Event Listeners =====
 function setupEventListeners() {
@@ -51,7 +110,13 @@ function setupEventListeners() {
 
             // ตรวจสอบจำนวนรูป (จำกัด 3 รูป)
             if (files.length + selectedFiles.length > 3) {
-                alert("สามารถเลือกรูปภาพได้ไม่เกิน 3 รูปครับ");
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'แจ้งเตือน',
+                    text: 'สามารถเลือกรูปภาพได้ไม่เกิน 3 รูปครับ',
+                    confirmButtonColor: '#ffc107',
+                    confirmButtonText: 'ตกลง'
+                });
                 this.value = '';
                 return;
             }
@@ -61,7 +126,13 @@ function setupEventListeners() {
             const existingSize = selectedFiles.reduce((acc, file) => acc + file.size, 0);
 
             if ((totalSize + existingSize) > 5 * 1024 * 1024) {
-                alert("ขนาดไฟล์รวมกันต้องไม่เกิน 5MB ครับ");
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'ขนาดไฟล์เกินกำหนด',
+                    text: 'ขนาดไฟล์รวมกันต้องไม่เกิน 5MB ครับ',
+                    confirmButtonColor: '#ffc107',
+                    confirmButtonText: 'ตกลง'
+                });
                 this.value = '';
                 return;
             }
@@ -323,6 +394,28 @@ function summaryData() {
 async function handleComplaintSubmit(e) {
     e.preventDefault();
 
+    // ตรวจสอบความถูกต้องของข้อมูลทั้งหมดในฟอร์ม (ป้องกันการกด Enter ข้ามขั้นตอน)
+    const form = e.target;
+    if (!form.checkValidity()) {
+        const firstInvalid = form.querySelector(':invalid');
+        if (firstInvalid) {
+            // ค้นหาว่าอยู่ขั้นตอนไหน
+            const stepDiv = firstInvalid.closest('.form-step');
+            if (stepDiv) {
+                const stepNum = parseInt(stepDiv.id.replace('formStep', ''));
+                if (!isNaN(stepNum)) {
+                    goToStep(stepNum);
+                    setTimeout(() => {
+                        firstInvalid.reportValidity();
+                    }, 500); // รอให้หน้าเปลี่ยนเสร็จก่อน
+                    return;
+                }
+            }
+            firstInvalid.reportValidity();
+        }
+        return;
+    }
+
     // บังคับให้กด ยอมรับนโยบายความเป็นส่วนตัว
     const privacyConsent = document.getElementById('privacyConsent');
     if (privacyConsent && !privacyConsent.checked) {
@@ -528,7 +621,13 @@ async function handleComplaintSubmit(e) {
 
     } catch (error) {
         console.error("Error submitting complaint:", error);
-        alert("เกิดข้อผิดพลาดในการส่งข้อมูล: " + error.message + "\n\nกรุณาติดต่อแอดมินเพื่อขอความช่วยเหลือ");
+        Swal.fire({
+            icon: 'error',
+            title: 'เกิดข้อผิดพลาด',
+            text: "เกิดข้อผิดพลาดในการส่งข้อมูล: " + error.message + "\n\nกรุณาติดต่อแอดมินเพื่อขอความช่วยเหลือ",
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'ตกลง'
+        });
     } finally {
         // คืนสถานะปุ่ม
         submitBtn.innerHTML = originalText;
@@ -826,27 +925,28 @@ function showSuccessModal(ticketId) {
 }
 
 // ===== ฟังก์ชันแจ้งเตือน =====
+// ===== ฟังก์ชันแจ้งเตือน (Updated to SweetAlert2) =====
 function showAlert(message, type = 'info') {
-    // สร้างแจ้งเตือนชั่วคราว
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-    alertDiv.style.cssText = `
-        top: 100px;
-        right: 20px;
-        z-index: 9999;
-        min-width: 300px;
-    `;
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
+    // แปลงชนิด alert เป็น icon ของ SweetAlert2
+    let icon = type;
+    if (type === 'danger') icon = 'error';
+    if (type === 'primary') icon = 'info';
 
-    document.body.appendChild(alertDiv);
-
-    // ลบแจ้งเตือนหลังจาก 5 วินาที
-    setTimeout(() => {
-        alertDiv.remove();
-    }, 5000);
+    Swal.fire({
+        icon: icon,
+        title: message,
+        showConfirmButton: true,
+        confirmButtonText: 'ตกลง',
+        confirmButtonColor: '#1b5e20',
+        timer: 3000, // ปิดอัตโนมัติใน 3 วินาที
+        timerProgressBar: true,
+        showClass: {
+            popup: 'animate__animated animate__bounceIn' // เอฟเฟกต์เด้งเข้า
+        },
+        hideClass: {
+            popup: 'animate__animated animate__fadeOutUp'
+        }
+    });
 }
 
 // ===== ฟังก์ชันแปลงสถานะเป็นข้อความภาษาไทย =====
@@ -968,3 +1068,63 @@ function showDeveloperAnnouncement() {
         });
     }, 1000);
 }
+
+// ===== Intercept native validation bubbles and replace with beautiful SweetAlert2 popups =====
+let isShowingValidationAlert = false;
+document.addEventListener('invalid', function (e) {
+    // Prevent default browser tooltip bubble
+    e.preventDefault();
+    
+    // Prevent multiple popups at the same time
+    if (isShowingValidationAlert) return;
+    isShowingValidationAlert = true;
+    
+    const input = e.target;
+    
+    // Find field label or text label
+    let fieldName = '';
+    if (input.id) {
+        const label = document.querySelector(`label[for="${input.id}"]`);
+        if (label) {
+            fieldName = label.textContent.replace('*', '').trim();
+        }
+    }
+    
+    if (!fieldName) {
+        const formLabel = input.closest('.mb-4, .mb-3, div')?.querySelector('.form-label');
+        if (formLabel) {
+            fieldName = formLabel.textContent.replace('*', '').trim();
+        }
+    }
+    
+    if (!fieldName) {
+        fieldName = input.placeholder || input.name || 'ข้อมูล';
+    }
+    
+    // Focus the element
+    input.focus();
+    input.classList.add('is-invalid');
+    
+    // Remove invalid styling when user modifies the value
+    const clearInvalidStyle = function () {
+        input.classList.remove('is-invalid');
+        input.removeEventListener('input', clearInvalidStyle);
+        input.removeEventListener('change', clearInvalidStyle);
+    };
+    input.addEventListener('input', clearInvalidStyle);
+    input.addEventListener('change', clearInvalidStyle);
+    
+    // Show beautiful alert
+    Swal.fire({
+        icon: 'warning',
+        title: 'กรุณากรอกข้อมูลให้ครบถ้วน',
+        text: `โปรดระบุ "${fieldName}"`,
+        confirmButtonColor: '#1b5e20',
+        confirmButtonText: 'ตกลง',
+        showClass: {
+            popup: 'animate__animated animate__shakeX'
+        }
+    }).then(() => {
+        isShowingValidationAlert = false;
+    });
+}, true);
