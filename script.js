@@ -1,6 +1,8 @@
 // ===== ตัวแปร Global =====
 let complaintsCollection;
 let selectedFiles = []; // เก็บไฟล์รูปภาพที่เลือกไว้
+let activeTrackedDocId = null;
+let selectedFeedbackRating = 0;
 
 // ===== ฟังก์ชันเริ่มต้น =====
 document.addEventListener('DOMContentLoaded', function () {
@@ -281,6 +283,28 @@ function setupEventListeners() {
                 otherReporterTypeInput.value = '';
             }
         });
+    }
+
+    // การจัดการแบบประเมินความพึงพอใจ
+    const starBtns = document.querySelectorAll('.star-rating-btn');
+    starBtns.forEach(btn => {
+        btn.addEventListener('click', function () {
+            const val = parseInt(this.getAttribute('data-value'));
+            selectedFeedbackRating = val;
+            highlightStars(val);
+        });
+        btn.addEventListener('mouseover', function () {
+            const val = parseInt(this.getAttribute('data-value'));
+            highlightStars(val);
+        });
+        btn.addEventListener('mouseout', function () {
+            highlightStars(selectedFeedbackRating);
+        });
+    });
+
+    const submitFeedbackBtn = document.getElementById('submitFeedbackBtn');
+    if (submitFeedbackBtn) {
+        submitFeedbackBtn.addEventListener('click', submitSatisfactionFeedback);
     }
 }
 
@@ -803,8 +827,16 @@ async function handleTrackStatus() {
             .get();
 
         // แสดงข้อมูลที่พบ
+        if (querySnapshot.empty) {
+            showAlert("ไม่พบข้อมูลรหัส Ticket ID นี้ในระบบ กรุณาตรวจสอบอีกครั้ง", "warning");
+            trackingResult.classList.add('d-none');
+            noResult.classList.remove('d-none');
+            return;
+        }
+
         const doc = querySnapshot.docs[0];
         const data = doc.data();
+        activeTrackedDocId = doc.id;
 
         if (data.isDuplicate && data.duplicateOf) {
             showAlert(`เรื่องนี้เป็นเรื่องซ้ำ กำลังดำเนินการรวมชุดข้อมูลกับ Ticket: ${data.duplicateOf}`, "info");
@@ -848,6 +880,36 @@ async function handleTrackStatus() {
 
         // อัพเดต progress bar ตามสถานะ
         updateProgressBar(data.status);
+
+        // จัดการแสดงผลส่วนแบบประเมินความพึงพอใจ
+        const satisfactionContainer = document.getElementById('satisfactionFeedbackContainer');
+        if (satisfactionContainer) {
+            if (data.status === 'resolved') {
+                satisfactionContainer.classList.remove('d-none');
+                
+                // ตรวจสอบว่าเคยประเมินแล้วหรือยัง
+                if (data.feedback) {
+                    document.getElementById('feedbackFormArea').classList.add('d-none');
+                    document.getElementById('feedbackResultArea').classList.remove('d-none');
+                    
+                    const starsDisplay = document.getElementById('feedbackStarsDisplay');
+                    starsDisplay.innerHTML = '';
+                    const rating = data.feedback.rating || 0;
+                    for (let i = 1; i <= 5; i++) {
+                        starsDisplay.innerHTML += i <= rating ? '<i class="bi bi-star-fill fs-4 mx-1"></i>' : '<i class="bi bi-star fs-4 mx-1"></i>';
+                    }
+                    document.getElementById('feedbackCommentDisplay').textContent = data.feedback.comment ? `"${data.feedback.comment}"` : '-(ไม่มีข้อเสนอแนะ)-';
+                } else {
+                    document.getElementById('feedbackFormArea').classList.remove('d-none');
+                    document.getElementById('feedbackResultArea').classList.add('d-none');
+                    document.getElementById('feedbackComment').value = '';
+                    selectedFeedbackRating = 0;
+                    highlightStars(0);
+                }
+            } else {
+                satisfactionContainer.classList.add('d-none');
+            }
+        }
 
         // แสดงผลลัพธ์
         trackingResult.classList.remove('d-none');
@@ -1128,3 +1190,79 @@ document.addEventListener('invalid', function (e) {
         isShowingValidationAlert = false;
     });
 }, true);
+
+// ===== ฟังก์ชันไฮไลท์คะแนนดาวประเมิน =====
+function highlightStars(rating) {
+    const starBtns = document.querySelectorAll('.star-rating-btn');
+    starBtns.forEach(btn => {
+        const val = parseInt(btn.getAttribute('data-value'));
+        const icon = btn.querySelector('i');
+        if (val <= rating) {
+            btn.style.color = '#ffc107'; // สีทอง
+            if (icon) {
+                icon.classList.remove('bi-star');
+                icon.classList.add('bi-star-fill');
+            }
+        } else {
+            btn.style.color = '#cbd5e1'; // สีเทา
+            if (icon) {
+                icon.classList.remove('bi-star-fill');
+                icon.classList.add('bi-star');
+            }
+        }
+    });
+}
+
+// ===== ฟังก์ชันส่งคำร้องเรียนแบบประเมินความพึงพอใจ =====
+async function submitSatisfactionFeedback() {
+    if (!activeTrackedDocId) return;
+    if (selectedFeedbackRating === 0) {
+        showAlert("กรุณาเลือกดาวเพื่อประเมินความพึงพอใจ", "warning");
+        return;
+    }
+
+    const comment = document.getElementById('feedbackComment').value.trim();
+    const submitBtn = document.getElementById('submitFeedbackBtn');
+    const originalText = submitBtn.innerHTML;
+    
+    try {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>กำลังส่ง...';
+
+        const feedbackData = {
+            rating: selectedFeedbackRating,
+            comment: comment || '',
+            submittedAt: new Date()
+        };
+
+        await complaintsCollection.doc(activeTrackedDocId).update({
+            feedback: feedbackData
+        });
+
+        // แสดงผลความสำเร็จผ่าน SweetAlert2
+        Swal.fire({
+            icon: 'success',
+            title: 'ประเมินสำเร็จ',
+            text: 'ขอบคุณที่ประเมินความพึงพอใจให้พวกเราสภานักเรียนครับ',
+            confirmButtonColor: '#1b5e20',
+            confirmButtonText: 'ตกลง'
+        });
+
+        // อัปเดตการแสดงผลในหน้าติดตาม
+        document.getElementById('feedbackFormArea').classList.add('d-none');
+        document.getElementById('feedbackResultArea').classList.remove('d-none');
+
+        const starsDisplay = document.getElementById('feedbackStarsDisplay');
+        starsDisplay.innerHTML = '';
+        for (let i = 1; i <= 5; i++) {
+            starsDisplay.innerHTML += i <= selectedFeedbackRating ? '<i class="bi bi-star-fill fs-4 mx-1"></i>' : '<i class="bi bi-star fs-4 mx-1"></i>';
+        }
+        document.getElementById('feedbackCommentDisplay').textContent = comment ? `"${comment}"` : '-(ไม่มีข้อเสนอแนะ)-';
+
+    } catch (error) {
+        console.error("Error submitting feedback:", error);
+        showAlert("เกิดข้อผิดพลาดในการบันทึกข้อมูลประเมิน: " + error.message, "danger");
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }
+}
