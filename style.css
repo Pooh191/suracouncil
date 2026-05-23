@@ -3755,3 +3755,96 @@ span.flatpickr-weekday {
         transform: translateY(0);
     }
 }
+
+/* ===== Interactive SVG School Map & Star Ratings Styles ===== */
+.star-rating-btn {
+    font-size: 2.2rem;
+    cursor: pointer;
+    color: #cbd5e1;
+    transition: transform 0.2s ease, color 0.2s ease;
+    display: inline-block;
+}
+.star-rating-btn:hover {
+    transform: scale(1.2);
+}
+
+/* ===== Active Filter Chips ===== */
+.active-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(135deg, #e8f5e9 0%, #f0fdf4 100%);
+    border: 1.5px solid #86efac;
+    color: #166534;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 4px 10px 4px 12px;
+    border-radius: 999px;
+    animation: chipFadeIn 0.2s ease;
+    white-space: nowrap;
+}
+
+@keyframes chipFadeIn {
+    from { opacity: 0; transform: scale(0.85); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.chip-close-btn {
+    background: none;
+    border: none;
+    color: #16a34a;
+    font-size: 0.75rem;
+    padding: 0 2px;
+    cursor: pointer;
+    line-height: 1;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    transition: background 0.15s, color 0.15s;
+}
+.chip-close-btn:hover {
+    background: #dc2626;
+    color: #fff;
+}
+
+/* ===== Result Count Bar ===== */
+.result-count-bar {
+    font-size: 0.8rem;
+    color: #64748b;
+    padding: 4px 0;
+}
+.result-count-bar strong {
+    color: #1b5e20;
+}
+
+/* ===== Filter Status Bar ===== */
+.filter-status-bar {
+    border-top: 1px solid #f1f5f9;
+    background: #fafafa;
+}
+
+/* ===== Email Notification Badge (Toast) ===== */
+.email-sent-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow: 0 8px 24px rgba(27,94,32,0.3);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 9999;
+    animation: toastSlideIn 0.3s ease;
+}
+@keyframes toastSlideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
