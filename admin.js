@@ -209,8 +209,6 @@ async function handleAdminLogin(e) {
 
     } catch (error) {
         console.error("Login error:", error);
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
 
         Swal.fire({
             icon: 'error',
@@ -218,6 +216,9 @@ async function handleAdminLogin(e) {
             text: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง หากพบปัญหาบ่อยครั้งกรุณาติดต่อแอดมิน',
             confirmButtonColor: '#1b5e20'
         });
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
     }
 }
 
@@ -428,6 +429,16 @@ function showLogin() {
     document.getElementById('loginSection').classList.remove('d-none');
     document.getElementById('dashboardSection').classList.add('d-none');
     currentUser = null;
+
+    // คืนค่าปุ่มเข้าสู่ระบบไม่ให้ค้างสถานะกำลังโหลด
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        const submitBtn = loginForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="bi bi-box-arrow-in-right me-2"></i> เข้าสู่ระบบ';
+            submitBtn.disabled = false;
+        }
+    }
 }
 
 // ===== ฟังก์ชันโหลดข้อมูล Dashboard =====
@@ -2395,3 +2406,63 @@ function initCalendarSelectors() {
         });
     }
 }
+
+// ===== Intercept native validation bubbles and replace with beautiful SweetAlert2 popups =====
+let isShowingValidationAlert = false;
+document.addEventListener('invalid', function (e) {
+    // Prevent default browser tooltip bubble
+    e.preventDefault();
+    
+    // Prevent multiple popups at the same time
+    if (isShowingValidationAlert) return;
+    isShowingValidationAlert = true;
+    
+    const input = e.target;
+    
+    // Find field label or text label
+    let fieldName = '';
+    if (input.id) {
+        const label = document.querySelector(`label[for="${input.id}"]`);
+        if (label) {
+            fieldName = label.textContent.replace('*', '').trim();
+        }
+    }
+    
+    if (!fieldName) {
+        const formLabel = input.closest('.mb-4, .mb-3, div')?.querySelector('.form-label');
+        if (formLabel) {
+            fieldName = formLabel.textContent.replace('*', '').trim();
+        }
+    }
+    
+    if (!fieldName) {
+        fieldName = input.placeholder || input.name || 'ข้อมูล';
+    }
+    
+    // Focus the element
+    input.focus();
+    input.classList.add('is-invalid');
+    
+    // Remove invalid styling when user modifies the value
+    const clearInvalidStyle = function () {
+        input.classList.remove('is-invalid');
+        input.removeEventListener('input', clearInvalidStyle);
+        input.removeEventListener('change', clearInvalidStyle);
+    };
+    input.addEventListener('input', clearInvalidStyle);
+    input.addEventListener('change', clearInvalidStyle);
+    
+    // Show beautiful alert
+    Swal.fire({
+        icon: 'warning',
+        title: 'กรุณากรอกข้อมูลให้ครบถ้วน',
+        text: `โปรดระบุ "${fieldName}"`,
+        confirmButtonColor: '#1b5e20',
+        confirmButtonText: 'ตกลง',
+        showClass: {
+            popup: 'animate__animated animate__shakeX'
+        }
+    }).then(() => {
+        isShowingValidationAlert = false;
+    });
+}, true);
