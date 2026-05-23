@@ -164,7 +164,7 @@
                             </div>
 
                             <!-- Filter Group -->
-                            <div class="filter-group d-flex gap-2">
+                            <div class="filter-group d-flex gap-2 flex-wrap">
                                 <div class="filter-item">
                                     <div class="filter-label-v2"><i class="bi bi-folder-fill me-1"></i>หมวดหมู่</div>
                                     <select id="categoryFilter" class="form-select admin-filter-select-v2">
@@ -196,6 +196,20 @@
                                         <option value="yearly">รายปี (ปีนี้)</option>
                                     </select>
                                 </div>
+                                <div class="filter-item">
+                                    <div class="filter-label-v2"><i class="bi bi-sort-down me-1"></i>เรียงลำดับ</div>
+                                    <select id="sortFilter" class="form-select admin-filter-select-v2">
+                                        <option value="newest">ล่าสุดก่อน</option>
+                                        <option value="oldest">เก่าสุดก่อน</option>
+                                        <option value="status">เรียงตามสถานะ</option>
+                                    </select>
+                                </div>
+                                <!-- ปุ่มล้างตัวกรอง -->
+                                <div class="filter-item d-flex align-items-end">
+                                    <button id="clearFiltersBtn" class="btn btn-outline-secondary btn-sm rounded-pill px-3" title="ล้างตัวกรองทั้งหมด" style="height: 38px;">
+                                        <i class="bi bi-x-circle me-1"></i>ล้างตัวกรอง
+                                    </button>
+                                </div>
                             </div>
 
                             <!-- Action Group -->
@@ -213,6 +227,17 @@
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Active Filter Chips + Result Count -->
+                <div class="filter-status-bar px-4 pb-3">
+                    <!-- Active Filter Chips -->
+                    <div id="activeFilterChips" class="d-none d-flex flex-wrap gap-2 mb-2"></div>
+                    <!-- Result Count -->
+                    <div class="result-count-bar">
+                        <i class="bi bi-list-ul me-1"></i>
+                        แสดง <strong id="resultCount">-</strong> จากทั้งหมด <strong id="totalCount">-</strong> รายการ | ค้นหาได้: Ticket ID, หัวข้อ, ชื่อผู้แจ้ง, อีเมล, สถานที่
                     </div>
                 </div>
                 <div class="card-body p-0">
@@ -346,9 +371,15 @@
                             <div style="height: 250px; position: relative;" class="mb-4">
                                 <canvas id="reporterChart"></canvas>
                             </div>
-                            <div id="averageResolutionTime" class="p-3 bg-light rounded-4">
-                                <small class="text-muted d-block">ระยะเวลาแก้ไขเฉลี่ย</small>
-                                <h4 class="fw-bold mb-0 text-success" id="avgTimeBox">-</h4>
+                            <div class="d-flex flex-column gap-2">
+                                <div id="averageResolutionTime" class="p-3 bg-light rounded-4">
+                                    <small class="text-muted d-block">ระยะเวลาแก้ไขเฉลี่ย</small>
+                                    <h4 class="fw-bold mb-0 text-success" id="avgTimeBox">-</h4>
+                                </div>
+                                <div id="averageSatisfaction" class="p-3 bg-light rounded-4">
+                                    <small class="text-muted d-block">ความพึงพอใจเฉลี่ย</small>
+                                    <h4 class="fw-bold mb-0 text-warning" id="avgRatingBox">-</h4>
+                                </div>
                             </div>
                         </div>
                     </div>
