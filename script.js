@@ -595,45 +595,7 @@ async function handleComplaintSubmit(e) {
             duplicateOf: null
         };
 
-        // ===== ตรวจสอบเรื่องซ้ำอัตโนมัติ (Duplicate Detection) =====
-        // ปรับปรุงเกณฑ์การตรวจสอบ: หมวดหมู่ + สถานที่ + (หัวข้อ หรือ รายละเอียด)
-        const duplicateSnapshot = await complaintsCollection
-            .where("category", "==", finalCategory)
-            .where("location", "==", complaintData.location)
-            .get();
 
-        // ค้นหาเรื่องที่อาจจะเป็นเรื่องซ้ำ (เฉพาะที่ยังอยู่ระหว่างดำเนินการ หรือถูกปฏิเสธไปก่อนหน้า)
-        const activeDuplicate = duplicateSnapshot.docs.find(doc => {
-            const d = doc.data();
-            const status = d.status;
-
-            // ถ้าสถานะเดิมคือ 'เสร็จสิ้น' (resolved) จะอนุญาตให้แจ้งใหม่ได้ทันที (เพราะปัญหาเดิมอาจกลับมาเกิดซ้ำ)
-            if (status === 'resolved') return false;
-
-            // ตรวจสอบความคล้ายคลึงของหัวข้อหรือรายละเอียด (สำหรับสถานะอื่นๆ เช่น waiting, accepted, in-progress, rejected)
-            const isTitleSimilar = d.title && d.title.trim().toLowerCase() === complaintData.title.trim().toLowerCase();
-            const isDetailsSimilar = d.details && d.details.trim().toLowerCase() === complaintData.details.trim().toLowerCase();
-
-            return isTitleSimilar || isDetailsSimilar;
-        });
-
-        if (activeDuplicate) {
-            const existingData = activeDuplicate.data();
-
-            // แจ้งเตือนนักเรียนและหยุดการส่งทันที เพื่อไม่ให้เกิดข้อมูลซ้ำซ้อน
-            await Swal.fire({
-                title: 'ตรวจพบเรื่องซ้ำในระบบ!',
-                html: `เรื่องนี้มีการแจ้งไว้แล้วในระบบ (Ticket ID: <b>${existingData.ticketId}</b>)<br><br><b>หัวข้อ:</b> ${existingData.title}<br><b>สถานที่:</b> ${existingData.location}<br><br>คุณสามารถใช้รหัส Ticket เดิมเพื่อติดตามความคืบหน้าได้เลยครับ`,
-                icon: 'info',
-                confirmButtonText: 'รับทราบ',
-                confirmButtonColor: '#1b5e20',
-            });
-
-            // คืนสถานะปุ่มและหยุดการทำงาน
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
-            return;
-        }
 
         // อัปโหลดรูปภาพทั้งหมด (ถ้ามี) ไปยัง ImgBB
         if (selectedFiles.length > 0) {
