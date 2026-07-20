@@ -43,6 +43,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 const userDoc = await db.collection("users").doc(user.uid).get();
                 if (userDoc.exists) {
                     userProfile = userDoc.data();
+                    // FIX Issue 2: ตรวจสอบ disabled flag ก่อนอนุญาตให้เข้าระบบ
+                    if (userProfile.disabled === true) {
+                        await auth.signOut();
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'บัญชีถูกระงับการใช้งาน',
+                            text: 'บัญชีนี้ถูกปิดการใช้งานโดยผู้ดูแลระบบ กรุณาติดต่อสภานักเรียนเพื่อขอรับสิทธิ์',
+                            confirmButtonColor: '#d33'
+                        });
+                        return;
+                    }
                     // บังคับให้เป็น superadmin ถ้าเป็นอีเมลตามที่กำหนด (ทำเพื่อความปลอดภัยกรณีข้อมูลใน DB ผิด)
                     if (user.email && user.email.toLowerCase() === "admin@student.sura.ac.th") {
                         userProfile.role = "superadmin";
@@ -110,6 +121,11 @@ document.addEventListener('DOMContentLoaded', function () {
             cookieConsent.classList.remove('show');
         });
     }
+
+    // อัปเดตปีลิขสิทธิ์ปัจจุบัน
+    document.querySelectorAll('.copyright-year').forEach(el => {
+        el.textContent = new Date().getFullYear();
+    });
 });
 
 // ===== ตั้งค่า Event Listeners =====
@@ -957,9 +973,9 @@ function loadComplaintsTable() {
                                 <i class="bi bi-person text-success"></i>
                             </div>
                             <div class="text-end text-md-start">
-                                <div class="fw-bold small">${data.reporterName || '-'}</div>
+                                <div class="fw-bold small">${data.anonymous ? (isSuperAdmin ? `ไม่ระบุตัวตน <span class="text-danger" style="font-size:0.65rem;">(จริง: ${data.reporterName})</span>` : "ไม่ระบุตัวตน 🔒") : (data.reporterName || '-')}</div>
                                 <div class="mb-1"><span class="badge bg-info-subtle text-info fw-normal" style="font-size: 0.7rem;">${data.reporterType || '-'}</span></div>
-                                <div class="text-muted" style="font-size: 0.75rem;">${data.reporterEmail || '-'}</div>
+                                <div class="text-muted" style="font-size: 0.75rem;">${(data.anonymous && !isSuperAdmin) ? "ปกปิดข้อมูล" : (data.reporterEmail || '-')}</div>
                             </div>
                         </div>
                     </td>
@@ -1061,6 +1077,34 @@ async function handleViewDetails(complaintIdOrEvent) {
 
         const data = doc.data();
 
+        // 🔒 ข้อมูลความปลอดภัยในการระบุตัวตนผู้ร้องเรียน
+        const isSuperAdmin = userProfile && userProfile.role === 'superadmin';
+        const displayReporterName = (data.anonymous) ? 
+            (isSuperAdmin ? `ไม่ระบุตัวตน <span class="text-danger" style="font-size: 0.8rem;">(ชื่อจริง: ${data.reporterName})</span>` : "ไม่ระบุตัวตน") : 
+            (data.reporterName || '-');
+
+        const displayEmail = (data.anonymous && !isSuperAdmin) ? "ข้อมูลปกปิดเพื่อความเป็นส่วนตัว" : (data.reporterEmail || '-');
+
+        let verificationText = "";
+        if (data.anonymous && !isSuperAdmin) {
+            verificationText = `<div class="small text-danger mt-2 border-top pt-2"><i class="bi bi-lock-fill"></i> ปกปิดข้อมูลการยืนยันตัวตน (ดูได้เฉพาะผู้ดูแลระบบระดับสูง เท่านั้น)</div>`;
+        } else {
+            let details = "";
+            if (data.reporterType && data.reporterType.includes('นักเรียน')) {
+                details = `รหัสนักเรียน: ${data.reporterStudentId || '-'} | ชั้นเรียน: ${data.reporterClass || '-'}`;
+            } else if (data.reporterType && data.reporterType.includes('ครูบุคลากร')) {
+                details = `รหัสบุคลากร: ${data.reporterStaffId || '-'} | ฝ่าย/แผนก: ${data.reporterDepartment || '-'}`;
+            } else {
+                details = `เบอร์โทรติดต่อ: ${data.reporterPhone || '-'}`;
+            }
+            verificationText = `
+                <div class="small text-dark mt-2 border-top pt-2">
+                    <i class="bi bi-shield-check text-success me-1"></i> <strong>ข้อมูลยืนยันตัวตน:</strong> ${details}
+                    ${data.anonymous ? '<span class="badge bg-warning text-dark ms-2" style="font-size:0.6rem;">ไม่ระบุตัวตน</span>' : ''}
+                </div>
+            `;
+        }
+
         // สร้างเนื้อหาใน Modal แบบพรีเมียม
         const modalBody = `
             <div class="text-start admin-detail-modal">
@@ -1110,13 +1154,14 @@ async function handleViewDetails(complaintIdOrEvent) {
                         <div class="detail-section mb-0 p-3 rounded-4 bg-info-subtle bg-opacity-10 border border-info-subtle">
                             <h6 class="text-info fw-bold mb-2 small text-uppercase"><i class="bi bi-person-circle me-2"></i>ข้อมูลผู้แจ้ง</h6>
                             <div class="d-flex align-items-center">
-                                <div class="bg-white rounded-circle p-2 me-3 border">
+                                <div class="bg-white rounded-circle p-2 me-3 border" style="width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;">
                                     <i class="bi bi-person-vcard text-info fs-4"></i>
                                 </div>
-                                <div>
-                                    <div class="fw-bold text-dark">${data.reporterName}</div>
-                                    <div class="small text-muted">${data.reporterEmail}</div>
+                                <div class="w-100">
+                                    <div class="fw-bold text-dark">${displayReporterName}</div>
+                                    <div class="small text-muted">${displayEmail}</div>
                                     <div class="badge bg-info text-white mt-1 fw-normal">${data.reporterType || 'นักเรียน'}</div>
+                                    ${verificationText}
                                 </div>
                             </div>
                         </div>
@@ -1321,6 +1366,9 @@ async function handleStatusChange(e) {
         // แสดงแจ้งเตือน
         showAdminAlert(`อัพเดตสถานะเป็น "${getStatusText(newStatus)}" สำเร็จ`, 'success');
 
+        // FIX Issue 1: ซิงค์ตัวเลขสถิติสรุปใน metadata/statistics
+        updatePublicStatsAdmin('change', data.status, newStatus);
+
         // ส่งอีเมลแจ้งเตือนผู้แจ้ง (ถ้ามีอีเมล)
         if (data.reporterEmail && newStatus !== 'waiting') {
             sendStatusEmailNotification(data, newStatus, feedback);
@@ -1378,12 +1426,23 @@ async function exportToCSV() {
         });
 
         const snapshot = await complaintsCollection.get();
+        const isSuperAdmin = userProfile && userProfile.role === 'superadmin';
         let csvContent = "\uFEFF"; // Unicode Character 'ZERO WIDTH NO-BREAK SPACE' for Excel UTF-8
-        csvContent += "Ticket ID,วันที่แจ้ง,หัวข้อเรื่อง,หมวดหมู่,สถานที่,สถานะ,ผู้ร้องเรียน,ประเภทผู้แจ้ง,รายละเอียด\n";
+        let headers = "Ticket ID,วันที่แจ้ง,หัวข้อเรื่อง,หมวดหมู่,สถานที่,สถานะ,ผู้ร้องเรียน,ประเภทผู้แจ้ง,รายละเอียด";
+        if (isSuperAdmin) {
+            headers += ",ข้อมูลการยืนยันตัวตน,อีเมลติดต่อ";
+        }
+        csvContent += headers + "\n";
 
         snapshot.forEach(doc => {
             const d = doc.data();
             const date = d.createdAt ? d.createdAt.toDate().toLocaleDateString('th-TH') : '-';
+            
+            // ป้องกันข้อมูลหลุดจากการส่งออกรายงานแบบไม่ระบุตัวตน
+            const reporterName = d.anonymous ? 
+                (isSuperAdmin ? `ไม่ระบุตัวตน (จริง: ${d.reporterName})` : "ไม่ระบุตัวตน") : 
+                (d.reporterName || '');
+
             const row = [
                 d.ticketId || '',
                 date,
@@ -1391,10 +1450,27 @@ async function exportToCSV() {
                 d.category || '',
                 d.location || '',
                 getStatusText(d.status),
-                d.reporterName || '',
+                reporterName,
                 d.reporterType || '',
                 `"${(d.details || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`
             ];
+
+            if (isSuperAdmin) {
+                let verificationInfo = "";
+                if (d.reporterType && d.reporterType.includes('นักเรียน')) {
+                    verificationInfo = `รหัสนักเรียน: ${d.reporterStudentId || '-'} ชั้น: ${d.reporterClass || '-'}`;
+                } else if (d.reporterType && d.reporterType.includes('ครูบุคลากร')) {
+                    verificationInfo = `รหัสบุคลากร: ${d.reporterStaffId || '-'} แผนก: ${d.reporterDepartment || '-'}`;
+                } else {
+                    verificationInfo = `เบอร์โทร: ${d.reporterPhone || '-'}`;
+                }
+                if (d.anonymous) {
+                    verificationInfo = `[ส่งไม่ระบุตัวตน] ${verificationInfo}`;
+                }
+                row.push(`"${verificationInfo}"`);
+                row.push(`"${d.reporterEmail || '-'}"`);
+            }
+
             csvContent += row.join(",") + "\n";
         });
 
@@ -1436,7 +1512,14 @@ async function handleDeleteComplaint(e) {
     if (!result.isConfirmed) return;
 
     try {
+        // อ่านสถานะก่อนลบ เพื่อซิงค์สถิติให้ถูกต้อง
+        const docSnap = await complaintsCollection.doc(complaintId).get();
+        const deletedStatus = docSnap.exists ? docSnap.data().status : null;
+
         await complaintsCollection.doc(complaintId).delete();
+
+        // FIX Issue 1: ลบตัวเลขสถิติออกด้วย
+        if (deletedStatus) updatePublicStatsAdmin('delete', deletedStatus, null);
 
         Swal.fire({
             icon: 'success',
@@ -1855,7 +1938,10 @@ async function loadUsersTable() {
                 <td>
                     <div class="d-flex align-items-center">
                         <div class="user-avatar-placeholder me-3">${firstLetter}</div>
-                        <div class="fw-bold text-dark">${data.displayName || '-'}</div>
+                        <div>
+                            <div class="fw-bold text-dark">${data.displayName || '-'}</div>
+                            ${data.disabled ? '<span class="badge bg-danger" style="font-size:0.65rem;">ระงับการใช้งาน</span>' : ''}
+                        </div>
                     </div>
                 </td>
                 <td>
@@ -2015,20 +2101,37 @@ async function handleAddUser() {
 
 async function handleDeleteUser(uid, email) {
     const result = await Swal.fire({
-        title: 'ยืนยันการลบ?',
-        text: `คุณต้องการลบผู้ใช้งาน ${email} หรือไม่?`,
+        title: 'ยืนยันการลบผู้ใช้งาน?',
+        html: `
+            <p>คุณต้องการลบ <strong>${email}</strong> ออกจากระบบหรือไม่?</p>
+            <div class="alert alert-warning text-start small mt-2 mb-0">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                <strong>หมายเหตุด้านความปลอดภัย:</strong> ระบบจะ <u>ปิดการใช้งาน</u> บัญชีนี้ใน Firestore ทันที
+                ซึ่งจะป้องกันไม่ให้ล็อกอินได้อีก หากต้องการลบออกจาก Firebase Authentication อย่างถาวร
+                กรุณาดำเนินการใน <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a> ด้วยตนเอง
+            </div>`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'ยืนยันการลบ',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'ปิดการใช้งานบัญชีนี้',
         cancelButtonText: 'ยกเลิก'
     });
 
     if (result.isConfirmed) {
         try {
-            await db.collection("users").doc(uid).delete();
-            Swal.fire('สำเร็จ', 'ลบผู้ใช้งานเรียบร้อยแล้ว', 'success');
+            // ตั้ง disabled flag ใน Firestore เพื่อป้องกันการล็อกอิน
+            await db.collection("users").doc(uid).update({
+                disabled: true,
+                disabledAt: firebase.firestore.FieldValue.serverTimestamp(),
+                disabledBy: currentUser ? currentUser.email : 'superadmin'
+            });
+            Swal.fire({
+                icon: 'success',
+                title: 'ปิดการใช้งานสำเร็จ',
+                html: `ปิดการใช้งานบัญชี <strong>${email}</strong> เรียบร้อยแล้ว<br>
+                       <small class="text-muted">หากต้องการลบถาวรออกจาก Firebase Auth กรุณาไปที่ Firebase Console</small>`
+            });
             loadUsersTable();
         } catch (error) {
             console.error("Error deleting user:", error);
@@ -2498,8 +2601,8 @@ function initCalendarSelectors() {
         monthSelect.appendChild(opt);
     });
 
-    // เติมปี (2569 - 2570)
-    for (let y = 2026; y <= 2027; y++) {
+    // เติมปี (2569 - 2571)
+    for (let y = 2026; y <= 2028; y++) {
         const opt = document.createElement('option');
         opt.value = y;
         opt.textContent = y + 543; // พ.ศ.
@@ -2628,3 +2731,43 @@ document.addEventListener('invalid', function (e) {
         isShowingValidationAlert = false;
     });
 }, true);
+
+// ===== FIX Issue 1: ฟังก์ชันซิงค์สถิติสาธารณะ (ฝั่ง Admin) =====
+// เรียกหลังเปลี่ยนสถานะเรื่องร้องเรียน ให้หน้าหลักแสดงตัวเลขล่าสุดโดยไม่ต้องอ่าน complaints collection
+async function updatePublicStatsAdmin(changeType, oldStatus, newStatus) {
+    try {
+        const statsRef = db.collection('metadata').doc('statistics');
+        const increment = firebase.firestore.FieldValue.increment;
+        const updateObj = {};
+
+        if (changeType === 'add' && newStatus) {
+            updateObj.total = increment(1);
+            const key = statusToStatsKeyAdmin(newStatus);
+            if (key) updateObj[key] = increment(1);
+        } else if (changeType === 'change' && oldStatus && newStatus && oldStatus !== newStatus) {
+            const oldKey = statusToStatsKeyAdmin(oldStatus);
+            const newKey = statusToStatsKeyAdmin(newStatus);
+            if (oldKey) updateObj[oldKey] = increment(-1);
+            if (newKey) updateObj[newKey] = increment(1);
+        } else if (changeType === 'delete' && oldStatus) {
+            updateObj.total = increment(-1);
+            const key = statusToStatsKeyAdmin(oldStatus);
+            if (key) updateObj[key] = increment(-1);
+        }
+
+        if (Object.keys(updateObj).length > 0) {
+            await statsRef.set(updateObj, { merge: true });
+        }
+    } catch (e) {
+        console.warn('updatePublicStatsAdmin error (non-critical):', e.message);
+    }
+}
+
+function statusToStatsKeyAdmin(status) {
+    const map = {
+        'waiting': 'waiting', 'pending': 'waiting',
+        'accepted': 'accepted', 'in-progress': 'inProgress',
+        'resolved': 'resolved', 'rejected': 'rejected'
+    };
+    return map[status] || null;
+}
