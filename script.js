@@ -3,7 +3,7 @@ let complaintsCollection;
 let selectedFiles = []; // เก็บไฟล์รูปภาพที่เลือกไว้
 let activeTrackedDocId = null;
 let selectedFeedbackRating = 0;
-let expectedCaptchaAnswer = 0;
+
 
 // ===== ฟังก์ชันเริ่มต้น =====
 document.addEventListener('DOMContentLoaded', function () {
@@ -27,12 +27,7 @@ document.addEventListener('DOMContentLoaded', function () {
         el.textContent = new Date().getFullYear();
     });
 
-    // ตั้งค่า Captcha ป้องกันสแปม
-    generateCaptcha();
-    const refreshCaptchaBtn = document.getElementById('refreshCaptchaBtn');
-    if (refreshCaptchaBtn) {
-        refreshCaptchaBtn.addEventListener('click', generateCaptcha);
-    }
+
 });
 
 // ===== ฟังก์ชันโหลดสถิติหน้าแรก (Real-time) =====
@@ -68,29 +63,7 @@ function loadPublicStatistics() {
     });
 }
 
-// ===== FIX Issue 7: ฟังก์ชันสร้างโจทย์คณิตศาสตร์ (Math Captcha) =====
-function generateCaptcha() {
-    const a = Math.floor(Math.random() * 10) + 1;
-    const b = Math.floor(Math.random() * 10) + 1;
-    const ops = ['+', '-', 'x'];
-    const op = ops[Math.floor(Math.random() * ops.length)];
-    let answer;
-    switch (op) {
-        case '+': answer = a + b; break;
-        case '-': answer = Math.max(a, b) - Math.min(a, b); break;
-        case 'x': answer = a * b; break;
-    }
-    const questionEl = document.getElementById('captchaQuestion');
-    if (questionEl) {
-        const displayA = op === '-' ? Math.max(a, b) : a;
-        const displayB = op === '-' ? Math.min(a, b) : b;
-        questionEl.textContent = `${displayA} ${op} ${displayB} = `;
-    }
-    expectedCaptchaAnswer = answer;
-    // รีเซ็ตช่องคำตอบ
-    const answerEl = document.getElementById('captchaAnswer');
-    if (answerEl) answerEl.value = '';
-}
+
 
 // ===== FIX Issue 1: ฟังก์ชันอัปเดตสถิติสรุปใน metadata/statistics =====
 // เรียกหลังจากส่งเรื่องใหม่ เพื่อให้หน้าหลักแสดงตัวเลขล่าสุดได้อย่างปลอดภัย
@@ -314,7 +287,7 @@ function setupEventListeners() {
         });
     }
 
-    // จัดการการเลือกประเภทผู้แจ้ง "อื่นๆ" และเรียกใช้ระบบยืนยันตัวตน
+    // จัดการการเลือกประเภทผู้แจ้ง "อื่นๆ"
     const reporterTypeSelect = document.getElementById('reporterType');
     const otherReporterTypeGroup = document.getElementById('otherReporterTypeGroup');
     const otherReporterTypeInput = document.getElementById('otherReporterType');
@@ -330,7 +303,6 @@ function setupEventListeners() {
                 otherReporterTypeInput.required = false;
                 otherReporterTypeInput.value = '';
             }
-            updateVerificationFields();
         });
     }
 
@@ -357,62 +329,7 @@ function setupEventListeners() {
     }
 }
 
-// ===== 🔒 FIX Issue 4: ควบคุมและสลับฟิลด์ยืนยันตัวตน (Identity Verification) =====
-function updateVerificationFields() {
-    const reporterType = document.getElementById('reporterType').value;
-    const card = document.getElementById('identityVerificationCard');
-    if (!card) return;
 
-    // Elements
-    const studentGroup = document.getElementById('studentVerificationGroup');
-    const studentClassGroup = document.getElementById('studentClassGroup');
-    const teacherGroup = document.getElementById('teacherVerificationGroup');
-    const teacherDeptGroup = document.getElementById('teacherDeptGroup');
-    const phoneGroup = document.getElementById('phoneVerificationGroup');
-
-    const studentIdInput = document.getElementById('reporterStudentId');
-    const studentClassInput = document.getElementById('reporterClass');
-    const staffIdInput = document.getElementById('reporterStaffId');
-    const teacherDeptInput = document.getElementById('reporterDepartment');
-    const phoneInput = document.getElementById('reporterPhone');
-
-    // Hide all first
-    studentGroup.style.display = 'none';
-    studentClassGroup.style.display = 'none';
-    teacherGroup.style.display = 'none';
-    teacherDeptGroup.style.display = 'none';
-    phoneGroup.style.display = 'none';
-
-    // Remove required attributes
-    studentIdInput.required = false;
-    studentClassInput.required = false;
-    staffIdInput.required = false;
-    teacherDeptInput.required = false;
-    phoneInput.required = false;
-
-    if (!reporterType) {
-        card.style.display = 'none';
-        return;
-    }
-
-    card.style.display = 'block';
-
-    if (reporterType === 'นักเรียน') {
-        studentGroup.style.display = 'block';
-        studentClassGroup.style.display = 'block';
-        studentIdInput.required = true;
-        studentClassInput.required = true;
-    } else if (reporterType === 'ครูบุคลากร') {
-        teacherGroup.style.display = 'block';
-        teacherDeptGroup.style.display = 'block';
-        staffIdInput.required = true;
-        teacherDeptInput.required = true;
-    } else {
-        // ผู้ปกครอง, ผู้มาติดต่อราชการ, อื่นๆ
-        phoneGroup.style.display = 'block';
-        phoneInput.required = true;
-    }
-}
 
 // ===== ฟังก์ชันอัปเดต Submission Stepper (New) =====
 function updateSubmissionStepper(step) {
@@ -514,38 +431,10 @@ function summaryData() {
     const isAnonymous = document.getElementById('anonymous').checked;
     const reporterName = isAnonymous ? "ไม่ระบุตัวตน" : document.getElementById('reporterName').value;
 
-    let finalReporterType = document.getElementById('reporterType').value;
-    if (finalReporterType === 'อื่นๆ') {
-        finalReporterType = `อื่นๆ (${document.getElementById('otherReporterType').value})`;
-    }
-
-    let verificationText = '-';
-    if (finalReporterType.includes('นักเรียน')) {
-        const studentId = document.getElementById('reporterStudentId').value;
-        const studentClass = document.getElementById('reporterClass').value;
-        verificationText = `นักเรียน (เลขประจำตัว: ${studentId || '-'}, ชั้น: ${studentClass || '-'})`;
-    } else if (finalReporterType.includes('ครูบุคลากร')) {
-        const staffId = document.getElementById('reporterStaffId').value;
-        const dept = document.getElementById('reporterDepartment').value;
-        verificationText = `ครู/บุคลากร (เลขประจำตัว: ${staffId || '-'}, ฝ่าย: ${dept || '-'})`;
-    } else {
-        const phone = document.getElementById('reporterPhone').value;
-        verificationText = `${finalReporterType} (เบอร์โทรติดต่อ: ${phone || '-'})`;
-    }
-
-    if (isAnonymous) {
-        verificationText += " 🔒 [ส่งแบบไม่ระบุตัวตน - ข้อมูลจะถูกซ่อนจากรายงานทั่วไป]";
-    }
-
     document.getElementById('summaryTitle').textContent = title || '-';
     document.getElementById('summaryCategory').textContent = category || '-';
     document.getElementById('summaryLocation').textContent = location || '-';
     document.getElementById('summaryReporter').textContent = reporterName || '-';
-    
-    const summaryVerificationEl = document.getElementById('summaryVerification');
-    if (summaryVerificationEl) {
-        summaryVerificationEl.textContent = verificationText;
-    }
 }
 
 // ===== ฟังก์ชันจัดการฟอร์มแจ้งเรื่อง =====
@@ -574,23 +463,7 @@ async function handleComplaintSubmit(e) {
         return;
     }
 
-    // 🔒 FIX Issue 7: ตรวจสอบคำตอบ Captcha ก่อนดำเนินการ
-    const captchaAnswerEl = document.getElementById('captchaAnswer');
-    if (captchaAnswerEl) {
-        const userAnswer = parseInt(captchaAnswerEl.value, 10);
-        if (isNaN(userAnswer) || userAnswer !== expectedCaptchaAnswer) {
-            Swal.fire({
-                icon: 'error',
-                title: 'คำตอบไม่ถูกต้อง',
-                text: 'กรุณากรอกคำตอบคำนวณเลขให้ถูกต้อง เพื่อยืนยันว่าคุณไม่ใช่บ็อต',
-                confirmButtonColor: '#1b5e20',
-                confirmButtonText: 'ตกลง'
-            });
-            generateCaptcha(); // สร้างโจทย์ใหม่
-            captchaAnswerEl.value = '';
-            return;
-        }
-    }
+
 
     // บังคับให้กด ยอมรับนโยบายความเป็นส่วนตัว
     const privacyConsent = document.getElementById('privacyConsent');
@@ -801,11 +674,7 @@ async function handleComplaintSubmit(e) {
         document.getElementById('reporterName').disabled = false;
         document.getElementById('privacyConsent').checked = false;
 
-        // รีเซ็ตการแสดงผลการยืนยันตัวตน
-        updateVerificationFields();
 
-        // FIX Issue 7: สร้างโจทย์ Captcha ใหม่หลังส่งสำเร็จ
-        generateCaptcha();
 
         // กลับไป Step 1 หลังส่งสำเร็จ (หรือปล่อยไว้หน้า Success Modal)
         goToStep(1);
