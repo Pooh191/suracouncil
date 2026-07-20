@@ -835,6 +835,7 @@ function loadComplaintsTable() {
         .orderBy('createdAt', 'desc')
         .onSnapshot(snapshot => {
             const tableBody = document.getElementById('complaintsTableBody');
+            const isSuperAdmin = userProfile && userProfile.role === 'superadmin';
             const searchTerm = document.getElementById('searchInput')?.value.toLowerCase().trim() || '';
             const categoryFilter = document.getElementById('categoryFilter')?.value || '';
             const statusFilter = document.getElementById('statusFilter')?.value || '';
