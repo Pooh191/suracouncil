@@ -3,6 +3,7 @@ let complaintsCollection;
 let selectedFiles = []; // เก็บไฟล์รูปภาพที่เลือกไว้
 let activeTrackedDocId = null;
 let selectedFeedbackRating = 0;
+let expectedCaptchaAnswer = 0;
 
 // ===== ฟังก์ชันเริ่มต้น =====
 document.addEventListener('DOMContentLoaded', function () {
@@ -20,9 +21,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // โหลดสถิติหน้าแรกแบบ Real-time
     loadPublicStatistics();
+
+    // อัปเดตปีลิขสิทธิ์ปัจจุบัน
+    document.querySelectorAll('.copyright-year').forEach(el => {
+        el.textContent = new Date().getFullYear();
+    });
+
+    // ตั้งค่า Captcha ป้องกันสแปม
+    generateCaptcha();
+    const refreshCaptchaBtn = document.getElementById('refreshCaptchaBtn');
+    if (refreshCaptchaBtn) {
+        refreshCaptchaBtn.addEventListener('click', generateCaptcha);
+    }
 });
 
 // ===== ฟังก์ชันโหลดสถิติหน้าแรก (Real-time) =====
+// 🔒 FIX Issue 1: อ่านเฉพาะเอกสารสถิติสรุปใน metadata/statistics
+// แทนการดึงข้อมูลทั้งหมดจาก complaints เพื่อป้องกันการรั่วไหลของข้อมูล
 function loadPublicStatistics() {
     const totalEl = document.getElementById('publicTotal');
     const waitingEl = document.getElementById('publicWaiting');
@@ -31,51 +46,84 @@ function loadPublicStatistics() {
     const resolvedEl = document.getElementById('publicResolved');
     const rejectedEl = document.getElementById('publicRejected');
 
-    if (!totalEl) return; // ถ้าไม่มี element (เช่น อยู่หน้าอื่น) ให้หยุด
+    if (!totalEl) return;
 
-    // ใช้ onSnapshot เพื่อให้ข้อมูลอัปเดตแบบ Real-time
-    complaintsCollection.onSnapshot(snapshot => {
-        let stats = {
-            total: 0,
-            waiting: 0,
-            accepted: 0,
-            inProgress: 0,
-            resolved: 0,
-            rejected: 0
+    // ดึงเฉพาะเอกสารสถิติที่ถูกอัปเดตโดย Cloud Function หรือฟังก์ชัน updatePublicStats()
+    // เอกสารนี้มีแค่ตัวเลขนับ ไม่มีข้อมูลส่วนตัวของผู้ร้องเรียนแม้แต่ชิ้นเดียว
+    db.collection('metadata').doc('statistics').onSnapshot(doc => {
+        const stats = doc.exists ? doc.data() : {
+            total: 0, waiting: 0, accepted: 0,
+            inProgress: 0, resolved: 0, rejected: 0
         };
-
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            stats.total++;
-
-            switch (data.status) {
-                case 'waiting':
-                case 'pending':
-                    stats.waiting++;
-                    break;
-                case 'accepted':
-                    stats.accepted++;
-                    break;
-                case 'in-progress':
-                    stats.inProgress++;
-                    break;
-                case 'resolved':
-                    stats.resolved++;
-                    break;
-                case 'rejected':
-                    stats.rejected++;
-                    break;
-            }
-        });
-
-        // อัปเดตตัวเลขในหน้าเว็บ
-        totalEl.textContent = stats.total;
-        waitingEl.textContent = stats.waiting;
-        acceptedEl.textContent = stats.accepted;
-        inProgressEl.textContent = stats.inProgress;
-        resolvedEl.textContent = stats.resolved;
-        rejectedEl.textContent = stats.rejected;
+        totalEl.textContent = stats.total || 0;
+        waitingEl.textContent = stats.waiting || 0;
+        acceptedEl.textContent = stats.accepted || 0;
+        inProgressEl.textContent = stats.inProgress || 0;
+        resolvedEl.textContent = stats.resolved || 0;
+        rejectedEl.textContent = stats.rejected || 0;
+    }, () => {
+        // Fallback: ถ้ายังไม่มีเอกสาร metadata/statistics ให้แสดง 0
+        [totalEl, waitingEl, acceptedEl, inProgressEl, resolvedEl, rejectedEl]
+            .forEach(el => { if (el) el.textContent = '0'; });
     });
+}
+
+// ===== FIX Issue 7: ฟังก์ชันสร้างโจทย์คณิตศาสตร์ (Math Captcha) =====
+function generateCaptcha() {
+    const a = Math.floor(Math.random() * 10) + 1;
+    const b = Math.floor(Math.random() * 10) + 1;
+    const ops = ['+', '-', 'x'];
+    const op = ops[Math.floor(Math.random() * ops.length)];
+    let answer;
+    switch (op) {
+        case '+': answer = a + b; break;
+        case '-': answer = Math.max(a, b) - Math.min(a, b); break;
+        case 'x': answer = a * b; break;
+    }
+    const questionEl = document.getElementById('captchaQuestion');
+    if (questionEl) {
+        const displayA = op === '-' ? Math.max(a, b) : a;
+        const displayB = op === '-' ? Math.min(a, b) : b;
+        questionEl.textContent = `${displayA} ${op} ${displayB} = `;
+    }
+    expectedCaptchaAnswer = answer;
+    // รีเซ็ตช่องคำตอบ
+    const answerEl = document.getElementById('captchaAnswer');
+    if (answerEl) answerEl.value = '';
+}
+
+// ===== FIX Issue 1: ฟังก์ชันอัปเดตสถิติสรุปใน metadata/statistics =====
+// เรียกหลังจากส่งเรื่องใหม่ เพื่อให้หน้าหลักแสดงตัวเลขล่าสุดได้อย่างปลอดภัย
+async function updatePublicStats(changeType, oldStatus, newStatus) {
+    try {
+        const statsRef = db.collection('metadata').doc('statistics');
+        const increment = firebase.firestore.FieldValue.increment;
+
+        const updateObj = { total: increment(changeType === 'add' ? 1 : 0) };
+
+        if (changeType === 'add' && newStatus) {
+            const key = statusToStatsKey(newStatus);
+            if (key) updateObj[key] = increment(1);
+        } else if (changeType === 'change' && oldStatus && newStatus && oldStatus !== newStatus) {
+            const oldKey = statusToStatsKey(oldStatus);
+            const newKey = statusToStatsKey(newStatus);
+            if (oldKey) updateObj[oldKey] = increment(-1);
+            if (newKey) updateObj[newKey] = increment(1);
+        }
+
+        await statsRef.set(updateObj, { merge: true });
+    } catch (e) {
+        console.warn('updatePublicStats error (non-critical):', e.message);
+    }
+}
+
+function statusToStatsKey(status) {
+    const map = {
+        'waiting': 'waiting', 'pending': 'waiting',
+        'accepted': 'accepted', 'in-progress': 'inProgress',
+        'resolved': 'resolved', 'rejected': 'rejected'
+    };
+    return map[status] || null;
 }
 
 // ===== ตั้งค่า Event Listeners =====
@@ -266,7 +314,7 @@ function setupEventListeners() {
         });
     }
 
-    // จัดการการเลือกประเภทผู้แจ้ง "อื่นๆ"
+    // จัดการการเลือกประเภทผู้แจ้ง "อื่นๆ" และเรียกใช้ระบบยืนยันตัวตน
     const reporterTypeSelect = document.getElementById('reporterType');
     const otherReporterTypeGroup = document.getElementById('otherReporterTypeGroup');
     const otherReporterTypeInput = document.getElementById('otherReporterType');
@@ -282,6 +330,7 @@ function setupEventListeners() {
                 otherReporterTypeInput.required = false;
                 otherReporterTypeInput.value = '';
             }
+            updateVerificationFields();
         });
     }
 
@@ -305,6 +354,63 @@ function setupEventListeners() {
     const submitFeedbackBtn = document.getElementById('submitFeedbackBtn');
     if (submitFeedbackBtn) {
         submitFeedbackBtn.addEventListener('click', submitSatisfactionFeedback);
+    }
+}
+
+// ===== 🔒 FIX Issue 4: ควบคุมและสลับฟิลด์ยืนยันตัวตน (Identity Verification) =====
+function updateVerificationFields() {
+    const reporterType = document.getElementById('reporterType').value;
+    const card = document.getElementById('identityVerificationCard');
+    if (!card) return;
+
+    // Elements
+    const studentGroup = document.getElementById('studentVerificationGroup');
+    const studentClassGroup = document.getElementById('studentClassGroup');
+    const teacherGroup = document.getElementById('teacherVerificationGroup');
+    const teacherDeptGroup = document.getElementById('teacherDeptGroup');
+    const phoneGroup = document.getElementById('phoneVerificationGroup');
+
+    const studentIdInput = document.getElementById('reporterStudentId');
+    const studentClassInput = document.getElementById('reporterClass');
+    const staffIdInput = document.getElementById('reporterStaffId');
+    const teacherDeptInput = document.getElementById('reporterDepartment');
+    const phoneInput = document.getElementById('reporterPhone');
+
+    // Hide all first
+    studentGroup.style.display = 'none';
+    studentClassGroup.style.display = 'none';
+    teacherGroup.style.display = 'none';
+    teacherDeptGroup.style.display = 'none';
+    phoneGroup.style.display = 'none';
+
+    // Remove required attributes
+    studentIdInput.required = false;
+    studentClassInput.required = false;
+    staffIdInput.required = false;
+    teacherDeptInput.required = false;
+    phoneInput.required = false;
+
+    if (!reporterType) {
+        card.style.display = 'none';
+        return;
+    }
+
+    card.style.display = 'block';
+
+    if (reporterType === 'นักเรียน') {
+        studentGroup.style.display = 'block';
+        studentClassGroup.style.display = 'block';
+        studentIdInput.required = true;
+        studentClassInput.required = true;
+    } else if (reporterType === 'ครูบุคลากร') {
+        teacherGroup.style.display = 'block';
+        teacherDeptGroup.style.display = 'block';
+        staffIdInput.required = true;
+        teacherDeptInput.required = true;
+    } else {
+        // ผู้ปกครอง, ผู้มาติดต่อราชการ, อื่นๆ
+        phoneGroup.style.display = 'block';
+        phoneInput.required = true;
     }
 }
 
@@ -408,10 +514,38 @@ function summaryData() {
     const isAnonymous = document.getElementById('anonymous').checked;
     const reporterName = isAnonymous ? "ไม่ระบุตัวตน" : document.getElementById('reporterName').value;
 
+    let finalReporterType = document.getElementById('reporterType').value;
+    if (finalReporterType === 'อื่นๆ') {
+        finalReporterType = `อื่นๆ (${document.getElementById('otherReporterType').value})`;
+    }
+
+    let verificationText = '-';
+    if (finalReporterType.includes('นักเรียน')) {
+        const studentId = document.getElementById('reporterStudentId').value;
+        const studentClass = document.getElementById('reporterClass').value;
+        verificationText = `นักเรียน (เลขประจำตัว: ${studentId || '-'}, ชั้น: ${studentClass || '-'})`;
+    } else if (finalReporterType.includes('ครูบุคลากร')) {
+        const staffId = document.getElementById('reporterStaffId').value;
+        const dept = document.getElementById('reporterDepartment').value;
+        verificationText = `ครู/บุคลากร (เลขประจำตัว: ${staffId || '-'}, ฝ่าย: ${dept || '-'})`;
+    } else {
+        const phone = document.getElementById('reporterPhone').value;
+        verificationText = `${finalReporterType} (เบอร์โทรติดต่อ: ${phone || '-'})`;
+    }
+
+    if (isAnonymous) {
+        verificationText += " 🔒 [ส่งแบบไม่ระบุตัวตน - ข้อมูลจะถูกซ่อนจากรายงานทั่วไป]";
+    }
+
     document.getElementById('summaryTitle').textContent = title || '-';
     document.getElementById('summaryCategory').textContent = category || '-';
     document.getElementById('summaryLocation').textContent = location || '-';
     document.getElementById('summaryReporter').textContent = reporterName || '-';
+    
+    const summaryVerificationEl = document.getElementById('summaryVerification');
+    if (summaryVerificationEl) {
+        summaryVerificationEl.textContent = verificationText;
+    }
 }
 
 // ===== ฟังก์ชันจัดการฟอร์มแจ้งเรื่อง =====
@@ -438,6 +572,24 @@ async function handleComplaintSubmit(e) {
             firstInvalid.reportValidity();
         }
         return;
+    }
+
+    // 🔒 FIX Issue 7: ตรวจสอบคำตอบ Captcha ก่อนดำเนินการ
+    const captchaAnswerEl = document.getElementById('captchaAnswer');
+    if (captchaAnswerEl) {
+        const userAnswer = parseInt(captchaAnswerEl.value, 10);
+        if (isNaN(userAnswer) || userAnswer !== expectedCaptchaAnswer) {
+            Swal.fire({
+                icon: 'error',
+                title: 'คำตอบไม่ถูกต้อง',
+                text: 'กรุณากรอกคำตอบคำนวณเลขให้ถูกต้อง เพื่อยืนยันว่าคุณไม่ใช่บ็อต',
+                confirmButtonColor: '#1b5e20',
+                confirmButtonText: 'ตกลง'
+            });
+            generateCaptcha(); // สร้างโจทย์ใหม่
+            captchaAnswerEl.value = '';
+            return;
+        }
     }
 
     // บังคับให้กด ยอมรับนโยบายความเป็นส่วนตัว
@@ -552,6 +704,12 @@ async function handleComplaintSubmit(e) {
             anonymous: isAnonymous,
             reporterName: reporterName,
             reporterEmail: reporterEmail,
+            // 🔒 ข้อมูลการยืนยันตัวตน (Identity Verification)
+            reporterStudentId: finalReporterType.includes('นักเรียน') ? document.getElementById('reporterStudentId').value : "",
+            reporterClass: finalReporterType.includes('นักเรียน') ? document.getElementById('reporterClass').value : "",
+            reporterStaffId: finalReporterType.includes('ครูบุคลากร') ? document.getElementById('reporterStaffId').value : "",
+            reporterDepartment: finalReporterType.includes('ครูบุคลากร') ? document.getElementById('reporterDepartment').value : "",
+            reporterPhone: (!finalReporterType.includes('นักเรียน') && !finalReporterType.includes('ครูบุคลากร')) ? document.getElementById('reporterPhone').value : "",
             status: "waiting",
             createdAt: timestamp(),
             updatedAt: timestamp(),
@@ -621,6 +779,9 @@ async function handleComplaintSubmit(e) {
         // บันทึกข้อมูลไปยัง Firestore
         const docRef = await complaintsCollection.add(complaintData);
 
+        // FIX Issue 1: อัปเดตตัวเลขสถิติสรุปใน metadata/statistics
+        updatePublicStats('add', null, 'waiting');
+
         // ส่งอีเมลแจ้ง Ticket ID ผ่าน EmailJS
         sendEmailNotification(complaintData);
 
@@ -639,6 +800,12 @@ async function handleComplaintSubmit(e) {
         document.getElementById('reporterNameGroup').style.opacity = '1';
         document.getElementById('reporterName').disabled = false;
         document.getElementById('privacyConsent').checked = false;
+
+        // รีเซ็ตการแสดงผลการยืนยันตัวตน
+        updateVerificationFields();
+
+        // FIX Issue 7: สร้างโจทย์ Captcha ใหม่หลังส่งสำเร็จ
+        generateCaptcha();
 
         // กลับไป Step 1 หลังส่งสำเร็จ (หรือปล่อยไว้หน้า Success Modal)
         goToStep(1);
@@ -660,7 +827,46 @@ async function handleComplaintSubmit(e) {
 }
 
 // ===== ฟังก์ชันส่งอีเมลแจ้ง Ticket ID =====
-// ===== ฟังก์ชันอัปโหลดรูปภาพไปยัง ImgBB =====
+
+// ===== FIX Issue 6: บีบอัดรูปภาพด้วย Canvas ก่อนอัปโหลด =====
+// ลดขนาดรูปภาพลงเหลือสูงสุด 1200px และ JPEG 80% quality
+async function compressImageFile(file, maxWidth = 1200, quality = 0.8) {
+    return new Promise((resolve) => {
+        // ถ้าไฟล์เล็กกว่า 500KB ไม่ต้องบีบ
+        if (file.size < 500 * 1024) {
+            resolve(file);
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                let { width, height } = img;
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                canvas.toBlob((blob) => {
+                    const compressedFile = new File([blob], file.name, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    });
+                    console.log(`🗜️ บีบอัด: ${(file.size/1024).toFixed(0)}KB → ${(compressedFile.size/1024).toFixed(0)}KB`);
+                    resolve(compressedFile);
+                }, 'image/jpeg', quality);
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+// ===== ฟังก์ชันอัปโหลดรูปภาพไปยัง ImgBB (พร้อมการบีบอัด) =====
 async function uploadToImgBB(file) {
     const apiKey = "46dfbc930533d4e9c142365ba306242b"; // ⚠️ วาง API Key ที่ก๊อปมาจาก api.imgbb.com ที่นี่
 
@@ -669,8 +875,11 @@ async function uploadToImgBB(file) {
         return null;
     }
 
+    // บีบอัดรูปก่อนอัปโหลด
+    const compressed = await compressImageFile(file);
+
     const formData = new FormData();
-    formData.append("image", file);
+    formData.append("image", compressed);
 
     try {
         const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
