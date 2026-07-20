@@ -577,12 +577,6 @@ async function handleComplaintSubmit(e) {
             anonymous: isAnonymous,
             reporterName: reporterName,
             reporterEmail: reporterEmail,
-            // 🔒 ข้อมูลการยืนยันตัวตน (Identity Verification)
-            reporterStudentId: finalReporterType.includes('นักเรียน') ? document.getElementById('reporterStudentId').value : "",
-            reporterClass: finalReporterType.includes('นักเรียน') ? document.getElementById('reporterClass').value : "",
-            reporterStaffId: finalReporterType.includes('ครูบุคลากร') ? document.getElementById('reporterStaffId').value : "",
-            reporterDepartment: finalReporterType.includes('ครูบุคลากร') ? document.getElementById('reporterDepartment').value : "",
-            reporterPhone: (!finalReporterType.includes('นักเรียน') && !finalReporterType.includes('ครูบุคลากร')) ? document.getElementById('reporterPhone').value : "",
             status: "waiting",
             createdAt: timestamp(),
             updatedAt: timestamp(),
