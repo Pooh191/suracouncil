@@ -363,6 +363,45 @@
                                                 placeholder="กรอกอีเมลของท่านเพื่อติดตามสถานะคำร้องเรียน" required>
                                         </div>
 
+                                        <!-- 🔒 ส่วนยืนยันตัวตนสำหรับผู้ร้องเรียน (Identity Verification) -->
+                                        <div class="col-12 mb-3">
+                                            <div class="card p-3 border-0 bg-light rounded-4 shadow-sm" id="identityVerificationCard" style="display: none; border-left: 4px solid #198754 !important;">
+                                                <h6 class="fw-bold mb-3 text-success d-flex align-items-center">
+                                                    <i class="bi bi-shield-lock-fill me-2"></i> ระบบยืนยันตัวตนผู้ส่งคำร้องเรียน (Identity Verification)
+                                                </h6>
+                                                <div class="row">
+                                                    <!-- ย่อย 1: สำหรับนักเรียน -->
+                                                    <div class="col-md-6 mb-3 verification-subgroup" id="studentVerificationGroup" style="display: none;">
+                                                        <label for="reporterStudentId" class="form-label">เลขประจำตัวนักเรียน (5 หลัก) <span class="required-dot">*</span></label>
+                                                        <input type="text" class="form-control" id="reporterStudentId" pattern="\\d{5}" maxlength="5" placeholder="ระบุเลขประจำตัว เช่น 12345">
+                                                    </div>
+                                                    <div class="col-md-6 mb-3 verification-subgroup" id="studentClassGroup" style="display: none;">
+                                                        <label for="reporterClass" class="form-label">ระดับชั้น / ห้องเรียน <span class="required-dot">*</span></label>
+                                                        <input type="text" class="form-control" id="reporterClass" placeholder="ระบุชั้นเรียน เช่น ม.4/2 หรือ ม.6/12">
+                                                    </div>
+
+                                                    <!-- ย่อย 2: สำหรับครูบุคลากร -->
+                                                    <div class="col-md-6 mb-3 verification-subgroup" id="teacherVerificationGroup" style="display: none;">
+                                                        <label for="reporterStaffId" class="form-label">เลขประจำตัวบุคลากร (6 หลัก) <span class="required-dot">*</span></label>
+                                                        <input type="text" class="form-control" id="reporterStaffId" pattern="\\d{6}" maxlength="6" placeholder="ระบุเลขประจำตัวบุคลากร เช่น 987654">
+                                                    </div>
+                                                    <div class="col-md-6 mb-3 verification-subgroup" id="teacherDeptGroup" style="display: none;">
+                                                        <label for="reporterDepartment" class="form-label">กลุ่มสาระการเรียนรู้ / ฝ่ายงาน <span class="required-dot">*</span></label>
+                                                        <input type="text" class="form-control" id="reporterDepartment" placeholder="เช่น วิทยาศาสตร์และเทคโนโลยี หรือ ฝ่ายบริการ">
+                                                    </div>
+
+                                                    <!-- ย่อย 3: สำหรับผู้ปกครอง และอื่นๆ -->
+                                                    <div class="col-md-12 mb-3 verification-subgroup" id="phoneVerificationGroup" style="display: none;">
+                                                        <label for="reporterPhone" class="form-label">เบอร์โทรศัพท์ติดต่อ <span class="required-dot">*</span></label>
+                                                        <input type="tel" class="form-control" id="reporterPhone" pattern="0\\d{9}" maxlength="10" placeholder="ระบุเบอร์โทรศัพท์ 10 หลัก เช่น 0812345678">
+                                                    </div>
+                                                </div>
+                                                <div class="form-text text-muted">
+                                                    <i class="bi bi-info-circle me-1"></i> ข้อมูลนี้ใช้เพื่อยืนยันตัวตนว่ามีตัวตนอยู่จริงในสถานศึกษา เพื่อป้องกันการป้อนสแปม หากท่านเลือก "ไม่ระบุตัวตน" ข้อมูลเหล่านี้จะถูกซ่อนจากการมองเห็นของแอดมินทั่วไป
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <!-- รายละเอียด -->
                                         <div class="col-12 mb-3">
                                             <label for="details" class="form-label">รายละเอียด <span
@@ -445,6 +484,13 @@
                                                 </div>
                                                 <span class="summary-value" id="summaryReporter">-</span>
                                             </div>
+                                            <div class="summary-item" id="summaryVerificationItem">
+                                                <div class="summary-label-group">
+                                                    <div class="summary-icon"><i class="bi bi-shield-check"></i></div>
+                                                    <span class="summary-label">การยืนยันตัวตน</span>
+                                                </div>
+                                                <span class="summary-value text-success fw-bold" id="summaryVerification">-</span>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -454,7 +500,17 @@
                                         <strong>กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนส่งข้อมูล</strong>
                                     </div>
 
-                                    <!-- ยอมรับความเป็นส่วนตัว -->
+                                     <!-- Captcha Section (ป้องกันสแปม) -->
+                                     <div class="mb-4" id="captchaSection">
+                                         <label class="form-label fw-bold text-dark"><i class="bi bi-shield-check me-2 text-success"></i>ยืนยันตัวตนสำหรับส่งข้อมูล (Security Check) <span class="text-danger">*</span></label>
+                                         <div class="input-group">
+                                             <span class="input-group-text bg-light fw-bold" id="captchaQuestion">5 + 7 = </span>
+                                             <input type="number" class="form-control" id="captchaAnswer" placeholder="กรอกคำตอบคำนวณเลข" required>
+                                             <button class="btn btn-outline-secondary" type="button" id="refreshCaptchaBtn" title="เปลี่ยนคำถาม"><i class="bi bi-arrow-clockwise"></i></button>
+                                         </div>
+                                     </div>
+
+                                     <!-- ยอมรับความเป็นส่วนตัว -->
                                     <div class="mb-4">
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" id="privacyConsent"
@@ -802,7 +858,7 @@
             <div class="row mt-5 pt-4 border-top border-white-10">
                 <div class="col-12 text-center">
                     <p class="mb-0 small text-white-50">
-                        © 2026 สภานักเรียนโรงเรียนสุรวิทยาคาร | พัฒนาโดย <strong>นายธนากร
+                        © <span class="copyright-year">2026</span> สภานักเรียนโรงเรียนสุรวิทยาคาร | พัฒนาโดย <strong>นายธนากร
                             แซ่จอง</strong>
                     </p>
                 </div>
