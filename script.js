@@ -729,7 +729,7 @@ async function uploadToImgBB(file) {
 // ===== ฟังก์ชันส่งอีเมลแจ้ง Ticket ID ผ่าน Google Apps Script =====
 async function sendEmailNotification(data) {
     // ⚠️ นำ URL จากการ Deploy Google Apps Script (Web App) มาวางที่นี่
-    const scriptURL = "https://script.google.com/macros/s/AKfycbw2na_npXMXQMaawUbS_fr4udtCGcJwNybgbKQSC8G57RRe6aGOshfTxyUl6Itu3VCtSA/exec"; // เปลี่ยนเป็น URL ของคุณ
+    const scriptURL = "https://script.google.com/macros/s/AKfycbwZqQUZGKNrABcwyYGLSYMuQ4hlGE5eTmfRuyncPqt4iNWEYhgn8rAkcVTeja8KlJoS5g/exec"; // เปลี่ยนเป็น URL ของคุณ
 
     if (!scriptURL || scriptURL.includes("AKfycby")) {
         console.warn("⚠️ Google Apps Script: กรุณาใส่ URL ของ Web App ในฟังก์ชัน sendEmailNotification ในไฟล์ script.js");
